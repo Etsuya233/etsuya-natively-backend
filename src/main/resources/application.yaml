@@ -1,0 +1,57 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: dc-learning
+  profiles:
+    active: dev
+    default: prod
+  rabbitmq:
+    host: localhost
+    password: qwertyuiop
+    port: 5672
+    username: dc
+    virtual-host: dc
+logging:
+  level:
+    sql: debug
+    com.dc.learning: debug
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.dc.learning
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: assign_id
+dc:
+  jwt:
+    private-key-path: security/private.key
+    public-key-path: security/public.key
+  swagger:
+    author: sb
+    description: nmsl
+    base-package: com.dc.learning
+    title: NMSL
+    email: null
+    license: Apache
+    version: 1
+  auth:
+    no-auth-path:
+      - /user/login
+      - /user/register
+      - /user/username
+      - /user/refresh
