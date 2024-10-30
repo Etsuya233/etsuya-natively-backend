@@ -2,20 +2,20 @@ server:
   port: 8080
 spring:
   application:
-    name: dc-learning
+    name: ety-natively
   profiles:
     active: dev
     default: prod
   rabbitmq:
     host: localhost
-    password: qwertyuiop
+    password: ety2004
     port: 5672
-    username: dc
-    virtual-host: dc
+    username: natively
+    virtual-host: natively
 logging:
   level:
     sql: debug
-    com.dc.learning: debug
+    com.ety.natively: debug
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -26,7 +26,7 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: '/**'
-      packages-to-scan: com.dc.learning
+      packages-to-scan: com.ety.natively
 knife4j:
   enable: true
   setting:
@@ -37,14 +37,14 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: assign_id
-dc:
+natively:
   jwt:
     private-key-path: security/private.key
     public-key-path: security/public.key
   swagger:
     author: sb
     description: nmsl
-    base-package: com.dc.learning
+    base-package: com.ety.natively
     title: NMSL
     email: null
     license: Apache
