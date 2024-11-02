@@ -15,4 +15,5 @@ public interface RedisConstant {
 	 */
 	Long AI_GENERAL_TTL = 6 * 60 * 60L;
 	Long CHECK_IN_CONSECUTIVE_TTL = 2 * 24 + 1L;
+	Long USER_VERSION_TTL = 2 * 24 * 60 * 60L;
 }

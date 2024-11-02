@@ -3,6 +3,8 @@ package com.ety.natively.interceptor;
 import cn.hutool.core.util.StrUtil;
 import com.ety.natively.constant.RedisConstant;
 import com.ety.natively.domain.po.User;
+import com.ety.natively.enums.ExceptionEnum;
+import com.ety.natively.exception.BaseException;
 import com.ety.natively.mapper.UserMapper;
 import com.ety.natively.properties.AuthProperties;
 import com.ety.natively.utils.BaseContext;
@@ -45,7 +47,7 @@ public class UserInfoInterceptor implements HandlerInterceptor {
 		//开始验证登陆状态
 		String header = request.getHeader("Authorization");
 		if(StrUtil.isBlank(header) || header.length() < 7){
-			throw new BaseException(ExceptionEnums.USER_ACCESS_TOKEN_FAILED);
+			throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
 		}
 
 		String token = header.substring(7); //Bearer ABCDEFG
@@ -55,25 +57,26 @@ public class UserInfoInterceptor implements HandlerInterceptor {
 		try {
 			claims = jwtUtils.parseToken(token);
 		} catch (Exception e) {
-			throw new BaseException(ExceptionEnums.USER_ACCESS_TOKEN_FAILED);
+			throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
 		}
 		Long userId = (Long) claims.get("userId");
-		Byte currentVersion = (Byte) claims.get("version");
+		Integer currentVersion = (Integer) claims.get("version");
 
 		//验证版本合法性
 		String versionStr = redisTemplate.opsForValue().get(RedisConstant.USER_VERSION_TOKEN_PREFIX + userId.toString());
-		Byte version;
+		Integer version;
 		if(versionStr == null){
 			User user = userMapper.selectById(userId);
 			version = user.getVersion();
-			redisTemplate.opsForValue().set(RedisConstant.USER_VERSION_TOKEN_PREFIX, version.toString());
+			redisTemplate.opsForValue().set(RedisConstant.USER_VERSION_TOKEN_PREFIX + userId, version.toString());
 		} else {
-			version = Byte.parseByte(versionStr);
+			version = Integer.parseInt(versionStr);
 		}
 		if(!version.equals(currentVersion)){
-			throw new BaseException(ExceptionEnums.USER_ACCESS_TOKEN_FAILED);
+			throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
 		}
 
+		//获取信息
 		BaseContext.setUserId(userId);
 
 		return true;

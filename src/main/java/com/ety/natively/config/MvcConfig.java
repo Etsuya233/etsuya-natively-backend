@@ -1,5 +1,6 @@
 package com.ety.natively.config;
 
+import com.ety.natively.interceptor.LocaleInterceptor;
 import com.ety.natively.interceptor.UserInfoInterceptor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,9 @@ public class MvcConfig implements WebMvcConfigurer {
 		registry.addInterceptor(userInfoInterceptor)
 				.addPathPatterns("/**")
 				.excludePathPatterns(excludePatterns);
+		registry.addInterceptor(new LocaleInterceptor())
+				.addPathPatterns("/**")
+				.order(-1);
 	}
 
 	@Bean

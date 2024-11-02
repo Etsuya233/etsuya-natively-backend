@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
  * </p>
  *
  * @author Etsuya
- * @since 2024-10-30
+ * @since 2024-10-31
  */
 @Service
 public class AiRecordServiceImpl extends ServiceImpl<AiRecordMapper, AiRecord> implements IAiRecordService {

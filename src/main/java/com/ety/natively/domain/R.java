@@ -21,7 +21,7 @@ public class R<T> {
 	}
 
 	public static <T> R<T> error(String msg){
-		return new R<>(0, msg, null);
+		return new R<>(1000, msg, null);
 	}
 
 	public static <T> R<T> error(int code, String msg){

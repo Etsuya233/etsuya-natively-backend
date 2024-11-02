@@ -1,6 +1,6 @@
 package com.ety.natively.utils.openai;
 
-import com.dc.learning.domain.po.AiModel;
+import com.ety.natively.domain.po.AiModel;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

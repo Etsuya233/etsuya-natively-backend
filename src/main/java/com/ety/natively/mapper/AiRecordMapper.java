@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  * </p>
  *
  * @author Etsuya
- * @since 2024-10-30
+ * @since 2024-10-31
  */
 public interface AiRecordMapper extends BaseMapper<AiRecord> {
 
