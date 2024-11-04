@@ -55,3 +55,5 @@ natively:
       - /user/register
       - /user/username
       - /user/refresh
+      - /general/location/**
+      - /general/language/**

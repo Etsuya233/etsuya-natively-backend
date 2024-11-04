@@ -100,7 +100,7 @@ public class UserController {
 		return R.ok();
 	}
 
-	@RequestMapping("/hello")
+	@GetMapping("/hello")
 	public R<String> helloRequest(){
 		return R.ok(ZonedDateTime.now()
 				.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.FULL).withLocale(BaseContext.getLanguage())));

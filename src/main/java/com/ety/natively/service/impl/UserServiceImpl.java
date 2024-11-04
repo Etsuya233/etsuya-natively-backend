@@ -11,20 +11,24 @@ import com.ety.natively.domain.dto.RegisterDto;
 import com.ety.natively.domain.dto.UserInfoModificationDto;
 import com.ety.natively.domain.dto.UserRefreshDto;
 import com.ety.natively.domain.po.User;
+import com.ety.natively.domain.po.UserLanguage;
 import com.ety.natively.domain.vo.LoginVo;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
+import com.ety.natively.mapper.UserLanguageMapper;
 import com.ety.natively.mapper.UserMapper;
+import com.ety.natively.service.GeneralService;
 import com.ety.natively.service.IUserService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.JwtUtils;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -43,6 +47,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	private final PasswordEncoder passwordEncoder;
 	private final JwtUtils jwtUtils;
 	private final StringRedisTemplate redisTemplate;
+	private final GeneralService generalService;
+	private final UserLanguageMapper userLanguageMapper;
+
+	private Set<String> languageCodes;
+	private final Set<String> locations = new HashSet<>();
+
+	@PostConstruct
+	public void init() {
+		languageCodes = generalService.getLanguageCodes();
+		for (Locale locale : Locale.getAvailableLocales()) {
+			locations.add(locale.getCountry());
+		}
+	}
 
 	@Override
 	public LoginVo login(LoginDto loginDto) {
@@ -101,11 +118,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 				throw new BaseException(ExceptionEnum.USER_EMAIL_TAKEN);
 			}
 		}
+		//检查地区
+		if(!locations.contains(registerDto.getLocation())){
+			throw new BaseException(ExceptionEnum.USER_LOCATION_FAILED);
+		}
+		//检查语言列表
+		ArrayList<UserLanguage> languages = new ArrayList<>();
+		for (RegisterDto.LanguageSelection selection : registerDto.getLanguage()) {
+			if(selection.getProficiency() <= 0 || selection.getProficiency() > 5){
+				throw new BaseException(ExceptionEnum.USER_LANGUAGE_PROFICIENCY_FAILED);
+			}
+			if(!languageCodes.contains(selection.getLanguage())){
+				throw new BaseException(ExceptionEnum.USER_LANGUAGE_FAILED);
+			}
+			languages.add(new UserLanguage(null, null, selection.getLanguage(), selection.getProficiency()));
+		}
 		//注册成功，插入数据库
 		User user = BeanUtil.toBean(registerDto, User.class);
 		String encodedPassword = passwordEncoder.encode(user.getPassword());
 		user.setPassword(encodedPassword);
 		this.save(user);
+		languages.forEach(lang -> lang.setUserId(user.getId()));
+		userLanguageMapper.insert(languages);
 	}
 
 	@Override

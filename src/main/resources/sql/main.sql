@@ -20,6 +20,14 @@ create table user (
     update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
 );
 
+create table user_language (
+    id bigint primary key not null comment '用户语言ID',
+    user_id bigint not null comment '用户ID',
+    lang varchar(5) not null comment 'ISO',
+    native boolean not null default false comment '是否是母语',
+    proficiency int not null default 3 comment '精通程度'
+);
+
 create table ai_model (
       id int primary key not null comment 'AI大模型ID',
       name varchar(64) not null comment 'AI扮演的角色名称',
@@ -98,4 +106,17 @@ create table help (
     language varchar(5) not null comment '帮助语言',
     create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
     update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
+);
+
+create table location (
+    id int primary key not null,
+    name varchar(255) not null ,
+    code char(2) not null
+);
+
+create table location_translation (
+    id int primary key not null auto_increment,
+    location_id int,
+    lang varchar(5),
+    translation varchar(255)
 );

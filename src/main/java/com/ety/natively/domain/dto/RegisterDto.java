@@ -7,6 +7,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.hibernate.validator.constraints.Range;
 
+import java.util.List;
+
 @Data
 public class RegisterDto {
 
@@ -26,7 +28,7 @@ public class RegisterDto {
 	private String password;
 
 	@Size(max = 255, message = "user.emailDigitLimit")
-	@Pattern(regexp = RegexConstant.EMAIL, message = "user.emailContentLimit")
+	@Pattern(regexp = "^$|" + RegexConstant.EMAIL, message = "user.emailContentLimit")
 	private String email;
 
 	@Range(min = 0, max = 2, message = "user.genderContentLimit")
@@ -37,5 +39,13 @@ public class RegisterDto {
 
 	@Size(min = 2, max = 2, message = "user.locationDigitLimit")
 	private String location;
+
+	private List<LanguageSelection> language;
+
+	@Data
+	public static class LanguageSelection {
+		private String language;
+		private Integer proficiency;
+	}
 }
 
