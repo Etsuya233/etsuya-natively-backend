@@ -47,5 +47,8 @@ public class RegisterDto {
 		private String language;
 		private Integer proficiency;
 	}
+
+	private String owner;
+	private String ownerId;
 }
 

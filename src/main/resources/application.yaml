@@ -6,16 +6,10 @@ spring:
   profiles:
     active: dev
     default: prod
-  rabbitmq:
-    host: localhost
-    password: ety2004
-    port: 5672
-    username: natively
-    virtual-host: natively
 logging:
   level:
-    sql: debug
-    com.ety.natively: debug
+    sql: info
+    com.ety.natively: info
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -57,3 +51,4 @@ natively:
       - /user/refresh
       - /general/location/**
       - /general/language/**
+      - /user/oauth2/**

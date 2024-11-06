@@ -1,27 +1,33 @@
 package com.ety.natively.controller;
 
 
+import cn.hutool.json.JSONUtil;
 import com.ety.natively.domain.R;
-import com.ety.natively.domain.dto.LoginDto;
-import com.ety.natively.domain.dto.RegisterDto;
-import com.ety.natively.domain.dto.UserInfoModificationDto;
-import com.ety.natively.domain.dto.UserRefreshDto;
+import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.vo.LoginVo;
+import com.ety.natively.domain.vo.OAuth2LoginVo;
 import com.ety.natively.service.IUserService;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.TranslationUtil;
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.people.v1.PeopleService;
+import com.google.api.services.people.v1.PeopleServiceScopes;
+import com.google.api.services.people.v1.model.Person;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.io.IOException;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
-import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -104,6 +110,12 @@ public class UserController {
 	public R<String> helloRequest(){
 		return R.ok(ZonedDateTime.now()
 				.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.FULL).withLocale(BaseContext.getLanguage())));
+	}
+
+	@PostMapping("/oauth2")
+	public R<OAuth2LoginVo> oAuth2Login(@RequestBody OAuth2Request request){
+		OAuth2LoginVo ret = userService.oAuth2Login(request);
+		return R.ok(ret);
 	}
 
 }

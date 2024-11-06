@@ -2,32 +2,57 @@ package com.ety.natively.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ety.natively.constant.Constant;
 import com.ety.natively.constant.RedisConstant;
 import com.ety.natively.constant.RegexConstant;
 import com.ety.natively.constant.UserStatusConstant;
-import com.ety.natively.domain.dto.LoginDto;
-import com.ety.natively.domain.dto.RegisterDto;
-import com.ety.natively.domain.dto.UserInfoModificationDto;
-import com.ety.natively.domain.dto.UserRefreshDto;
+import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.po.UserLanguage;
+import com.ety.natively.domain.po.UserOauth;
 import com.ety.natively.domain.vo.LoginVo;
+import com.ety.natively.domain.vo.OAuth2LoginVo;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
 import com.ety.natively.mapper.UserLanguageMapper;
 import com.ety.natively.mapper.UserMapper;
+import com.ety.natively.properties.MinioProperties;
+import com.ety.natively.properties.OAuth2Properties;
 import com.ety.natively.service.GeneralService;
+import com.ety.natively.service.IUserOauthService;
 import com.ety.natively.service.IUserService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.JwtUtils;
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
+import com.google.api.client.http.HttpTransport;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.people.v1.PeopleService;
+import com.google.api.services.people.v1.PeopleServiceScopes;
+import com.google.api.services.people.v1.model.EmailAddress;
+import com.google.api.services.people.v1.model.Person;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.RequestEntity;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -49,6 +74,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	private final StringRedisTemplate redisTemplate;
 	private final GeneralService generalService;
 	private final UserLanguageMapper userLanguageMapper;
+	private final OAuth2Properties oAuth2Properties;
+	private final MinioClient minioClient;
+	private final IUserOauthService userOauthService;
+	private final MinioProperties minioProperties;
 
 	private Set<String> languageCodes;
 	private final Set<String> locations = new HashSet<>();
@@ -88,6 +117,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			throw new BaseException(ExceptionEnum.USER_PASSWORD_NOT_MATCH);
 		}
 
+		return loginSuccess(user);
+	}
+
+	@NotNull
+	private LoginVo loginSuccess(User user) {
 		//登陆成功
 		Map<String, Object> claims = Map.of("userId", user.getId(),
 											"version", user.getVersion());
@@ -102,6 +136,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	}
 
 	@Override
+	@Transactional
 	public void register(RegisterDto registerDto) {
 		//检验是否重复
 		Long usernameCount = this.lambdaQuery()
@@ -140,6 +175,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		this.save(user);
 		languages.forEach(lang -> lang.setUserId(user.getId()));
 		userLanguageMapper.insert(languages);
+		//检查是否是OAuth2注册
+		if(registerDto.getOwner() != null){
+			switch(registerDto.getOwner()){
+				case "google" -> oAuth2GoogleRegisterComplete(registerDto.getOwnerId(), user.getId());
+			}
+		}
 	}
 
 	@Override
@@ -189,6 +230,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		if(user.getStatus() == UserStatusConstant.ERROR){
 			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
 		}
+		user.setAvatar(minioProperties.getPublicPrefix() + user.getAvatar());
 		user.setPassword(null);
 		return user;
 	}
@@ -202,6 +244,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
 		}
 		//TODO 这里需要一些隐私设置，比如跟据是否暂时某些信息来屏蔽某些字段
+		user.setAvatar(minioProperties.getPublicPrefix() + user.getAvatar());
 		user.setPassword(null);
 		user.setEmail(null);
 		return user;
@@ -246,6 +289,179 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		User user = BeanUtil.toBean(dto, User.class);
 		user.setId(BaseContext.getUserId());
 		this.updateById(user);
+	}
+
+
+	private final List<String> oauthGoogleScopes = List.of(PeopleServiceScopes.USERINFO_PROFILE, PeopleServiceScopes.USERINFO_EMAIL);
+	private final HttpTransport httpTransport = new NetHttpTransport();
+	private final GsonFactory gsonFactory = GsonFactory.getDefaultInstance();
+	private final PeopleService peopleService = new PeopleService.Builder(
+			httpTransport, gsonFactory, null)
+			.setApplicationName("Natively").build();
+
+	@Override
+	@Transactional
+	public OAuth2LoginVo oAuth2Login(OAuth2Request request) {
+		String owner = request.getOwner();
+		String code = request.getCode();
+
+		switch (owner){
+			case "google": return oAuth2GoogleRegister(code);
+			case "github": return oAuth2GithubRegister(code);
+		}
+
+		return null;
+	}
+
+	private OAuth2LoginVo oAuth2GithubRegister(String code) {
+		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("github");
+		RestTemplate restTemplate = new RestTemplate();
+
+		Map<String, String> body = Map.of(
+				"client_id", config.getClientId(),
+				"client_secret", config.getClientSecret(),
+				"redirect_uri", config.getRedirectUri(),
+				"code", code);
+
+		GithubAccessTokenDto res;
+		try {
+			URI accessTokenUrl = new URI("https://github.com/login/oauth/access_token");
+			RequestEntity<Map<String, String>> requestEntity = new RequestEntity<>(body, HttpMethod.POST, accessTokenUrl);
+			ResponseEntity<GithubAccessTokenDto> responseEntity = restTemplate.exchange(requestEntity, GithubAccessTokenDto.class);
+			if(!responseEntity.getStatusCode().is2xxSuccessful()) throw new RuntimeException("github登录获取access_token响应体为空");
+			res = responseEntity.getBody();
+		} catch (Exception e){
+			throw new RuntimeException(e);
+		}
+
+		Map<String, String> userInfoHeader = Map.of(
+				"Accept", "application/vnd.github+json",
+				"Authorization", "Bearer " + res.getAccessToken(),
+				"X-GitHub-Api-Version", "2022-11-28");
+		Map<String, String> userInfoRes;
+		try {
+			URI userInfoUri = new URI("https://github.com/login/oauth/access_token");
+			RequestEntity<Map<String, String>> requestEntity = new RequestEntity<>(userInfoHeader, HttpMethod.GET, userInfoUri);
+			ResponseEntity<Map<String, String>> responseEntity = restTemplate.exchange(requestEntity, new ParameterizedTypeReference<Map<String, String>>() {});
+			if(!responseEntity.getStatusCode().is2xxSuccessful()) throw new RuntimeException();
+			userInfoRes = responseEntity.getBody();
+		} catch (Exception e){
+			throw new RuntimeException(e);
+		}
+
+		String githubId = userInfoRes.get("id");
+		String nickname = userInfoRes.get("name");
+		String avatar = userInfoRes.get("avatar_url");
+		String email = userInfoRes.get("email");
+
+
+
+
+
+		return null;
+	}
+
+	private OAuth2LoginVo oAuth2GoogleRegister(String code) {
+		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("google");
+
+		//get access token
+		GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+				httpTransport,
+				gsonFactory,
+				config.getClientId(),
+				config.getClientSecret(),
+				oauthGoogleScopes
+		).setAccessType("offline").build();
+		Person person;
+		try {
+			GoogleTokenResponse response;
+			response = flow.newTokenRequest(code)
+					.setRedirectUri(config.getRedirectUri())
+					.setScopes(oauthGoogleScopes)
+					.setGrantType("authorization_code")
+					.execute();
+			String accessToken = response.getAccessToken();
+			person = peopleService.people().get("people/me")
+					.setAccessToken(accessToken)
+					.setPersonFields("names,emailAddresses,photos,biographies,genders,locales,locations")
+					.execute();
+		} catch (Exception e){
+			throw new RuntimeException(e);
+		}
+
+		//extract google id
+		String resourceName = person.getResourceName();
+		String googleId = resourceName.substring(resourceName.lastIndexOf('/') + 1);
+
+		//user exists?
+		UserOauth userOauth = userOauthService.lambdaQuery()
+				.eq(UserOauth::getOwner, "google")
+				.eq(UserOauth::getOwnerId, googleId)
+				.one();
+
+		String redisKey = RedisConstant.USER_OAUTH + "google:" + googleId;
+
+		if(userOauth == null){ //new user
+
+			//get things
+			String nickname = person.getNames().getFirst().getDisplayName(); //as nickname
+			String avatarUrlGoogle = person.getPhotos().getFirst().getUrl(); //avatar
+			String email = null; //email
+			for(EmailAddress emailAddress: person.getEmailAddresses()){
+				if(emailAddress.getMetadata().getPrimary()){
+					email = emailAddress.getValue();
+					break;
+				}
+			}
+
+			OAuth2RegisterDto registerDto = new OAuth2RegisterDto(nickname, email, avatarUrlGoogle, googleId, "google");
+			redisTemplate.opsForValue()
+					.set(redisKey, JSONUtil.toJsonStr(registerDto), RedisConstant.USER_OAUTH_TTL, TimeUnit.SECONDS);
+			return new OAuth2LoginVo(false, registerDto, null);
+
+		} else { //login
+			User user = this.lambdaQuery()
+					.eq(User::getId, userOauth.getUserId())
+					.one();
+			LoginVo loginVo = loginSuccess(user);
+			return new OAuth2LoginVo(true, null, loginVo);
+		}
+	}
+
+	@Transactional
+	void oAuth2GoogleRegisterComplete(String googleId, Long userId){
+		//get avatar
+		String registerDtoJson = redisTemplate.opsForValue()
+				.getAndDelete(RedisConstant.USER_OAUTH + "google:" + googleId);
+		OAuth2RegisterDto registerDto = JSONUtil.toBean(registerDtoJson, OAuth2RegisterDto.class);
+
+		String avatarUrlGoogle = registerDto.getAvatarUrl();
+		String avatarUrl;
+		String avatarFileName = UUID.randomUUID().toString();
+		try {
+			URL url = new URI(avatarUrlGoogle).toURL();
+			URLConnection connection = url.openConnection();
+			InputStream is = connection.getInputStream();
+			PutObjectArgs args = PutObjectArgs.builder()
+					.bucket("natively")
+					.object(avatarFileName)
+					.stream(is, connection.getContentLengthLong(), -1)
+					.contentType("application/octet-stream")
+					.build();
+			minioClient.putObject(args);
+			avatarUrl = "/natively/" + avatarFileName;
+			is.close();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
+		//update and insert into db
+		this.lambdaUpdate()
+				.eq(User::getId, userId)
+				.set(User::getAvatar, avatarUrl)
+				.update();
+		UserOauth userOauth = new UserOauth(null, userId, "google", googleId, true, null, null);
+		userOauthService.save(userOauth);
 	}
 
 

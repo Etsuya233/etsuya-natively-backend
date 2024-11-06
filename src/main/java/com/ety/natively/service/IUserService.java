@@ -1,12 +1,10 @@
 package com.ety.natively.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.ety.natively.domain.dto.LoginDto;
-import com.ety.natively.domain.dto.RegisterDto;
-import com.ety.natively.domain.dto.UserInfoModificationDto;
-import com.ety.natively.domain.dto.UserRefreshDto;
+import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.vo.LoginVo;
+import com.ety.natively.domain.vo.OAuth2LoginVo;
 
 /**
  * <p>
@@ -33,4 +31,6 @@ public interface IUserService extends IService<User> {
 	Boolean emailUnique(String email);
 
 	void modifyUserInfo(UserInfoModificationDto dto);
+
+	OAuth2LoginVo oAuth2Login(OAuth2Request request);
 }

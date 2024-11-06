@@ -28,6 +28,16 @@ create table user_language (
     proficiency int not null default 3 comment '精通程度'
 );
 
+create table user_oauth (
+    id bigint primary key not null comment '用户OAuthID',
+    user_id bigint comment '用户ID',
+    owner varchar(32) not null comment '提供商如google',
+    owner_id varchar(255) not null comment 'OAuth的ID',
+    registered boolean not null default false comment '是否已完成注册流程',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
+);
+
 create table ai_model (
       id int primary key not null comment 'AI大模型ID',
       name varchar(64) not null comment 'AI扮演的角色名称',
