@@ -4,10 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.ety.natively.constant.Constant;
-import com.ety.natively.constant.RedisConstant;
-import com.ety.natively.constant.RegexConstant;
-import com.ety.natively.constant.UserStatusConstant;
+import com.ety.natively.constant.*;
 import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.po.UserLanguage;
@@ -41,12 +38,14 @@ import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.InputStream;
@@ -78,6 +77,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	private final MinioClient minioClient;
 	private final IUserOauthService userOauthService;
 	private final MinioProperties minioProperties;
+	private final RestTemplate restTemplate;
 
 	private Set<String> languageCodes;
 	private final Set<String> locations = new HashSet<>();
@@ -177,9 +177,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		userLanguageMapper.insert(languages);
 		//检查是否是OAuth2注册
 		if(registerDto.getOwner() != null){
-			switch(registerDto.getOwner()){
-				case "google" -> oAuth2GoogleRegisterComplete(registerDto.getOwnerId(), user.getId());
-			}
+			oAuth2RegisterComplete(registerDto.getOwner(), registerDto.getOwnerId(), user.getId());
 		}
 	}
 
@@ -230,7 +228,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		if(user.getStatus() == UserStatusConstant.ERROR){
 			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
 		}
-		user.setAvatar(minioProperties.getPublicPrefix() + user.getAvatar());
+		user.setAvatar(minioProperties.getPublicPrefix() + MinioConstant.AVATAR_BUCKET + "/" + user.getAvatar());
 		user.setPassword(null);
 		return user;
 	}
@@ -244,7 +242,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
 		}
 		//TODO 这里需要一些隐私设置，比如跟据是否暂时某些信息来屏蔽某些字段
-		user.setAvatar(minioProperties.getPublicPrefix() + user.getAvatar());
+		user.setAvatar(minioProperties.getPublicPrefix() + MinioConstant.AVATAR_BUCKET + "/" + user.getAvatar());
 		user.setPassword(null);
 		user.setEmail(null);
 		return user;
@@ -305,17 +303,83 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		String owner = request.getOwner();
 		String code = request.getCode();
 
-		switch (owner){
-			case "google": return oAuth2GoogleRegister(code);
-			case "github": return oAuth2GithubRegister(code);
-		}
-
-		return null;
+		return switch (owner) {
+			case "google" -> oAuth2GoogleAuthentication(code);
+			case "github" -> oAuth2GithubAuthentication(code);
+			case "gitee" -> oAuth2GiteeAuthentication(code);
+			default -> null;
+		};
 	}
 
-	private OAuth2LoginVo oAuth2GithubRegister(String code) {
+	private OAuth2LoginVo oAuth2GiteeAuthentication(String code) {
+		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("gitee");
+
+		Map<String, String> body = Map.of(
+				"client_id", config.getClientId(),
+				"client_secret", config.getClientSecret(),
+				"redirect_uri", config.getRedirectUri(),
+				"code", code,
+				"grant_type", "authorization_code");
+
+		Map<String, String> res;
+		try {
+			URI accessTokenUrl = new URI("https://gitee.com/oauth/token");
+			RequestEntity<Map<String, String>> requestEntity = RequestEntity.post(accessTokenUrl).body(body);
+			ResponseEntity<Map<String, String>> responseEntity = restTemplate.exchange(requestEntity, new ParameterizedTypeReference<>(){});
+			if(!responseEntity.getStatusCode().is2xxSuccessful()) throw new RuntimeException("gitee登录获取access_token响应体为空");
+			res = responseEntity.getBody();
+		} catch (Exception e){
+			throw new RuntimeException(e);
+		}
+
+		if(res == null || res.get("access_token") == null){
+			throw new RuntimeException();
+		}
+
+		Map<String, Object> userInfoRes;
+		try {
+			URI userInfoUri = new URI("https://gitee.com/api/v5/user?access_token=" + res.get("access_token"));
+			RequestEntity<Void> requestEntity = RequestEntity.get(userInfoUri).build();
+			ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(requestEntity, new ParameterizedTypeReference<>() {});
+			if(!responseEntity.getStatusCode().is2xxSuccessful()) throw new RuntimeException();
+			userInfoRes = responseEntity.getBody();
+		} catch (Exception e){
+			throw new RuntimeException(e);
+		}
+
+		if(userInfoRes == null){
+			throw new RuntimeException();
+		}
+
+		List<Map<String, Object>> emailRes;
+		try {
+			URI userInfoUri = new URI("https://gitee.com/api/v5/emails?access_token=" + res.get("access_token"));
+			RequestEntity<Void> requestEntity = RequestEntity.get(userInfoUri).build();
+			ResponseEntity<List<Map<String, Object>>> responseEntity = restTemplate.exchange(requestEntity, new ParameterizedTypeReference<>() {});
+			if(!responseEntity.getStatusCode().is2xxSuccessful()) throw new RuntimeException();
+			emailRes = responseEntity.getBody();
+		} catch (Exception e){
+			throw new RuntimeException(e);
+		}
+
+		String giteeId = String.valueOf(userInfoRes.get("id"));
+		String nickname = (String) userInfoRes.get("name");
+		String avatar = (String) userInfoRes.get("avatar_url");
+		String email = null;
+		if(emailRes != null && !emailRes.isEmpty()){
+			email = (String) emailRes.getFirst().get("email");
+		}
+
+		return oAuth2Prediction(new OAuth2RegisterDto(nickname, email, avatar, giteeId, "gitee"));
+	}
+
+	/**
+	 * GitHub OAuth2登录获取信息
+	 * @param code code
+	 * @return 前端
+	 */
+	private OAuth2LoginVo oAuth2GithubAuthentication(String code) {
 		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("github");
-		RestTemplate restTemplate = new RestTemplate();
 
 		Map<String, String> body = Map.of(
 				"client_id", config.getClientId(),
@@ -323,45 +387,56 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 				"redirect_uri", config.getRedirectUri(),
 				"code", code);
 
-		GithubAccessTokenDto res;
+		Map<String, String> res;
 		try {
 			URI accessTokenUrl = new URI("https://github.com/login/oauth/access_token");
-			RequestEntity<Map<String, String>> requestEntity = new RequestEntity<>(body, HttpMethod.POST, accessTokenUrl);
-			ResponseEntity<GithubAccessTokenDto> responseEntity = restTemplate.exchange(requestEntity, GithubAccessTokenDto.class);
+			RequestEntity<Map<String, String>> requestEntity = RequestEntity.post(accessTokenUrl).body(body);
+			ResponseEntity<Map<String, String>> responseEntity = restTemplate.exchange(requestEntity, new ParameterizedTypeReference<>(){});
 			if(!responseEntity.getStatusCode().is2xxSuccessful()) throw new RuntimeException("github登录获取access_token响应体为空");
 			res = responseEntity.getBody();
 		} catch (Exception e){
 			throw new RuntimeException(e);
 		}
 
-		Map<String, String> userInfoHeader = Map.of(
-				"Accept", "application/vnd.github+json",
-				"Authorization", "Bearer " + res.getAccessToken(),
-				"X-GitHub-Api-Version", "2022-11-28");
-		Map<String, String> userInfoRes;
+		if(res == null || res.get("access_token") == null){
+			throw new RuntimeException();
+		}
+
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("Accept", "application/vnd.github+json");
+		headers.set("Authorization", "Bearer " + res.get("access_token"));
+		headers.set("X-GitHub-Api-Version", "2022-11-28");
+		Map<String, Object> userInfoRes;
 		try {
-			URI userInfoUri = new URI("https://github.com/login/oauth/access_token");
-			RequestEntity<Map<String, String>> requestEntity = new RequestEntity<>(userInfoHeader, HttpMethod.GET, userInfoUri);
-			ResponseEntity<Map<String, String>> responseEntity = restTemplate.exchange(requestEntity, new ParameterizedTypeReference<Map<String, String>>() {});
+			URI userInfoUri = new URI("https://api.github.com/user");
+			RequestEntity<Void> requestEntity = RequestEntity.get(userInfoUri)
+					.headers(headers)
+					.build();
+			ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(requestEntity, new ParameterizedTypeReference<>() {});
 			if(!responseEntity.getStatusCode().is2xxSuccessful()) throw new RuntimeException();
 			userInfoRes = responseEntity.getBody();
 		} catch (Exception e){
 			throw new RuntimeException(e);
 		}
 
-		String githubId = userInfoRes.get("id");
-		String nickname = userInfoRes.get("name");
-		String avatar = userInfoRes.get("avatar_url");
-		String email = userInfoRes.get("email");
+		if(userInfoRes == null){
+			throw new RuntimeException();
+		}
 
+		String githubId = String.valueOf(userInfoRes.get("id"));
+		String nickname = (String) userInfoRes.get("name");
+		String avatar = (String) userInfoRes.get("avatar_url");
+		String email = (String) userInfoRes.get("email");
 
-
-
-
-		return null;
+		return oAuth2Prediction(new OAuth2RegisterDto(nickname, email, avatar, githubId, "github"));
 	}
 
-	private OAuth2LoginVo oAuth2GoogleRegister(String code) {
+	/**
+	 * Google OAuth2登录获取信息
+	 * @param code code
+	 * @return 前端
+	 */
+	private OAuth2LoginVo oAuth2GoogleAuthentication(String code) {
 		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("google");
 
 		//get access token
@@ -393,33 +468,39 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		String resourceName = person.getResourceName();
 		String googleId = resourceName.substring(resourceName.lastIndexOf('/') + 1);
 
-		//user exists?
-		UserOauth userOauth = userOauthService.lambdaQuery()
-				.eq(UserOauth::getOwner, "google")
-				.eq(UserOauth::getOwnerId, googleId)
-				.one();
-
-		String redisKey = RedisConstant.USER_OAUTH + "google:" + googleId;
-
-		if(userOauth == null){ //new user
-
-			//get things
-			String nickname = person.getNames().getFirst().getDisplayName(); //as nickname
-			String avatarUrlGoogle = person.getPhotos().getFirst().getUrl(); //avatar
-			String email = null; //email
-			for(EmailAddress emailAddress: person.getEmailAddresses()){
-				if(emailAddress.getMetadata().getPrimary()){
-					email = emailAddress.getValue();
-					break;
-				}
+		//get things
+		String nickname = person.getNames().getFirst().getDisplayName(); //as nickname
+		String avatarUrlGoogle = person.getPhotos().getFirst().getUrl(); //avatar
+		String email = null; //email
+		for(EmailAddress emailAddress: person.getEmailAddresses()){
+			if(emailAddress.getMetadata().getPrimary()){
+				email = emailAddress.getValue();
+				break;
 			}
+		}
 
-			OAuth2RegisterDto registerDto = new OAuth2RegisterDto(nickname, email, avatarUrlGoogle, googleId, "google");
+		//check if login or register
+		return oAuth2Prediction(new OAuth2RegisterDto(nickname, email, avatarUrlGoogle, googleId, "google"));
+	}
+
+	/**
+	 * 判断是登录还是注册
+	 * @param dto 用来判断的东西
+	 * @return 前端返回值
+	 */
+	private OAuth2LoginVo oAuth2Prediction(OAuth2RegisterDto dto){
+		UserOauth userOauth = userOauthService.lambdaQuery()
+				.eq(UserOauth::getOwner, dto.getOwner())
+				.eq(UserOauth::getOwnerId, dto.getOwnerId())
+				.one();
+		if(userOauth == null){
+			OAuth2RegisterDto registerDto = new OAuth2RegisterDto(dto.getNickname(),
+					dto.getEmail(), dto.getAvatarUrl(), dto.getOwnerId(), dto.getOwner());
 			redisTemplate.opsForValue()
-					.set(redisKey, JSONUtil.toJsonStr(registerDto), RedisConstant.USER_OAUTH_TTL, TimeUnit.SECONDS);
+					.set(RedisConstant.USER_OAUTH + dto.getOwner() + ":" + dto.getOwnerId(),
+							JSONUtil.toJsonStr(registerDto), RedisConstant.USER_OAUTH_TTL, TimeUnit.SECONDS);
 			return new OAuth2LoginVo(false, registerDto, null);
-
-		} else { //login
+		} else {
 			User user = this.lambdaQuery()
 					.eq(User::getId, userOauth.getUserId())
 					.one();
@@ -429,17 +510,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	}
 
 	@Transactional
-	void oAuth2GoogleRegisterComplete(String googleId, Long userId){
+	void oAuth2RegisterComplete(String owner, String ownerId, Long userId){
 		//get avatar
 		String registerDtoJson = redisTemplate.opsForValue()
-				.getAndDelete(RedisConstant.USER_OAUTH + "google:" + googleId);
+				.getAndDelete(RedisConstant.USER_OAUTH + owner + ":" + ownerId);
 		OAuth2RegisterDto registerDto = JSONUtil.toBean(registerDtoJson, OAuth2RegisterDto.class);
 
-		String avatarUrlGoogle = registerDto.getAvatarUrl();
+		String avatarUrlOriginal = registerDto.getAvatarUrl();
 		String avatarUrl;
 		String avatarFileName = UUID.randomUUID().toString();
 		try {
-			URL url = new URI(avatarUrlGoogle).toURL();
+			URL url = new URI(avatarUrlOriginal).toURL();
 			URLConnection connection = url.openConnection();
 			InputStream is = connection.getInputStream();
 			PutObjectArgs args = PutObjectArgs.builder()
@@ -449,7 +530,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 					.contentType("application/octet-stream")
 					.build();
 			minioClient.putObject(args);
-			avatarUrl = "/natively/" + avatarFileName;
+			avatarUrl = MinioConstant.AVATAR_BUCKET + "/" + avatarFileName;
 			is.close();
 		} catch (Exception e) {
 			throw new RuntimeException(e);
@@ -460,7 +541,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 				.eq(User::getId, userId)
 				.set(User::getAvatar, avatarUrl)
 				.update();
-		UserOauth userOauth = new UserOauth(null, userId, "google", googleId, true, null, null);
+		UserOauth userOauth = new UserOauth(null, userId, owner, ownerId, true, null, null);
 		userOauthService.save(userOauth);
 	}
 
