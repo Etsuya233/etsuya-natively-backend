@@ -15,7 +15,13 @@ public enum ExceptionEnum {
 	USER_STATUS_ERROR(2006, 200, "user.statusError"),
 	USER_LANGUAGE_FAILED(2007, 200, "user.languageFailed"),
 	USER_LANGUAGE_PROFICIENCY_FAILED(2008, 200, "user.languageProficiencyFailed"),
-	USER_LOCATION_FAILED(2009, 200, "ex.userLocationFailed");
+	USER_LOCATION_FAILED(2009, 200, "ex.userLocationFailed"),
+
+	POST_TITLE_EMPTY(3001, 200, "post.postTitleEmpty"),
+	POST_TITLE_RULE(3002, 200, "post.titleRule"),
+	POST_NOT_EXIST(3003, 200, "post.notExist"),
+	POST_IMAGE_UPLOAD_ERROR(3004, 200, "post.imageUploadError"),
+	POST_VOICE_UPLOAD_ERROR(3005, 200, "post.voiceUploadError");
 
 	final int errorCode;
 	final int httpCode;

@@ -6,6 +6,8 @@ import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.vo.LoginVo;
 import com.ety.natively.domain.vo.OAuth2LoginVo;
 
+import java.util.List;
+
 /**
  * <p>
  *  服务类
@@ -26,6 +28,8 @@ public interface IUserService extends IService<User> {
 
 	User getUserInfo(Long id);
 
+	User getUserById(Long id);
+
 	Boolean usernameUnique(String username);
 
 	Boolean emailUnique(String email);
@@ -33,4 +37,6 @@ public interface IUserService extends IService<User> {
 	void modifyUserInfo(UserInfoModificationDto dto);
 
 	OAuth2LoginVo oAuth2Login(OAuth2Request request);
+
+	List<User> getUserByIds(List<Long> ids);
 }

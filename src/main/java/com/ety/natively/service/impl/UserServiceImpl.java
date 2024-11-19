@@ -22,6 +22,8 @@ import com.ety.natively.service.IUserOauthService;
 import com.ety.natively.service.IUserService;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.JwtUtils;
+import com.ety.natively.utils.MinioUtils;
+import com.ety.natively.utils.TimezoneUtil;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.http.HttpTransport;
@@ -39,13 +41,11 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.InputStream;
@@ -78,6 +78,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	private final IUserOauthService userOauthService;
 	private final MinioProperties minioProperties;
 	private final RestTemplate restTemplate;
+	private final MinioUtils minioUtils;
 
 	private Set<String> languageCodes;
 	private final Set<String> locations = new HashSet<>();
@@ -92,6 +93,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
 	@Override
 	public LoginVo login(LoginDto loginDto) {
+		BaseContext.setUserId(null);
 		String username = loginDto.getUsername();
 		String password = loginDto.getPassword();
 
@@ -138,6 +140,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	@Override
 	@Transactional
 	public void register(RegisterDto registerDto) {
+		BaseContext.setUserId(null);
 		//检验是否重复
 		Long usernameCount = this.lambdaQuery()
 				.eq(User::getUsername, registerDto.getUsername())
@@ -224,29 +227,34 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	@Override
 	public User getCurrent() {
 		Long userId = BaseContext.getUserId();
-		User user = this.getById(userId);
-		if(user.getStatus() == UserStatusConstant.ERROR){
-			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
-		}
-		user.setAvatar(minioProperties.getPublicPrefix() + MinioConstant.AVATAR_BUCKET + "/" + user.getAvatar());
+		User user = getUserById(userId);
 		user.setPassword(null);
 		return user;
 	}
 
 	@Override
 	public User getUserInfo(Long id) {
+		User user = getUserById(id);
+		//TODO 这里需要一些隐私设置，比如跟据是否暂时某些信息来屏蔽某些字段
+		user.setPassword(null);
+		user.setEmail(null);
+		return user;
+	}
+
+	@Override
+	public User getUserById(Long id){
 		User user = this.getById(id);
 		if(user == null){
 			throw new BaseException(ExceptionEnum.USER_NOT_FOUND);
 		} else if(user.getStatus() == UserStatusConstant.ERROR){
 			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
 		}
-		//TODO 这里需要一些隐私设置，比如跟据是否暂时某些信息来屏蔽某些字段
-		user.setAvatar(minioProperties.getPublicPrefix() + MinioConstant.AVATAR_BUCKET + "/" + user.getAvatar());
-		user.setPassword(null);
-		user.setEmail(null);
+		user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
+		TimezoneUtil.adjustCreateTimeTimezone(user);
+		TimezoneUtil.adjustUpdateTimeTimezone(user);
 		return user;
 	}
+
 
 	@Override
 	public Boolean usernameUnique(String username) {
@@ -289,6 +297,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		this.updateById(user);
 	}
 
+	@Override
+	public List<User> getUserByIds(List<Long> ids) {
+		List<User> users = this.lambdaQuery()
+				.in(User::getId, ids)
+				.list();
+		users.forEach(user -> user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar())));
+		TimezoneUtil.adjustCreateTimeTimezone(users);
+		TimezoneUtil.adjustUpdateTimeTimezone(users);
+		return users;
+	}
+
+	//------------------- OAuth2 -------------------
 
 	private final List<String> oauthGoogleScopes = List.of(PeopleServiceScopes.USERINFO_PROFILE, PeopleServiceScopes.USERINFO_EMAIL);
 	private final HttpTransport httpTransport = new NetHttpTransport();
@@ -524,7 +544,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			URLConnection connection = url.openConnection();
 			InputStream is = connection.getInputStream();
 			PutObjectArgs args = PutObjectArgs.builder()
-					.bucket("natively")
+					.bucket(MinioConstant.AVATAR_BUCKET)
 					.object(avatarFileName)
 					.stream(is, connection.getContentLengthLong(), -1)
 					.contentType("application/octet-stream")

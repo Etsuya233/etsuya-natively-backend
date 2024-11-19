@@ -130,3 +130,60 @@ create table location_translation (
     lang varchar(5),
     translation varchar(255)
 );
+
+create table post (
+    id bigint primary key not null comment '帖子ID',
+    user_id bigint not null comment '用户ID',
+    title varchar(255) not null comment '标题',
+    content text comment '内容',
+    type tinyint not null default 1 comment '类型，普通1，问答2',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
+);
+
+create table comment (
+    id bigint primary key not null comment '评论ID',
+    user_id bigint not null comment '用户ID',
+    post_id bigint not null comment '帖子ID',
+    parent_id bigint comment '关联评论ID',
+    content text comment '内容',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
+);
+
+create table vote (
+    id bigint primary key not null comment '投票ID',
+    user_id bigint not null comment '投票人ID',
+    post_id bigint comment '帖子ID',
+    comment_id bigint comment '评论ID',
+    type tinyint comment '1 点赞 -1 down vote' not null default 1,
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间',
+    unique (user_id, post_id),
+    unique (post_id, comment_id)
+);
+
+create table post_summary (
+    post_id bigint primary key not null comment '帖子ID',
+    upvote_count bigint not null comment '点赞数' default 0,
+    downvote_count bigint not null comment '差评数' default 0,
+    comment_count bigint not null default 0 comment '评论总数'
+);
+
+create table comment_summary (
+    comment_id bigint primary key not null comment '帖子ID',
+    upvote_count bigint not null comment '点赞数' default 0,
+    downvote_count bigint not null comment '差评数' default 0,
+    comment_count bigint not null default 0 comment '评论总数'
+);
+
+create table attachment (
+    id bigint primary key not null comment '附件ID',
+    post_id bigint comment '帖子ID',  -- 可为空，用于表示此附件属于一个帖子
+    comment_id bigint comment '评论ID',  -- 可为空，用于表示此附件属于一个评论
+    path varchar(512) not null comment '文件路径',  -- 附件的存储路径或URL
+    type tinyint not null comment '文件类型',  -- 例如 "1 图片 2 音频",
+    no int not null comment '第几个附件',
+    size bigint not null comment '文件大小（字节）',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC'
+);
