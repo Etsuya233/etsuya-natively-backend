@@ -7,8 +7,10 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class LoginVo {
-	private String accessToken;
-	private String refreshToken;
-	private Long userId;
+public class ExplanationVo {
+	private String explanation;
+
+	public static ExplanationVo empty() {
+		return new ExplanationVo("");
+	}
 }

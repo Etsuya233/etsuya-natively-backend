@@ -1,10 +1,12 @@
 package com.ety.natively.service;
 
+import com.ety.natively.domain.dto.BookmarkNewDto;
 import com.ety.natively.domain.dto.CommentDto;
 import com.ety.natively.domain.dto.PostDto;
 import com.ety.natively.domain.dto.VoteDto;
 import com.ety.natively.domain.po.Post;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.ety.natively.domain.vo.BookmarkVo;
 import com.ety.natively.domain.vo.CommentVo;
 import com.ety.natively.domain.vo.PostInfoVo;
 import com.ety.natively.domain.vo.PostVo;
@@ -37,4 +39,12 @@ public interface IPostService extends IService<Post> {
 	Long createPostNew(String postId, String content, Integer type, MultipartFile[] images, MultipartFile voice);
 
 	boolean vote(VoteDto dto);
+
+	List<PostInfoVo> getUserPosts(Long userId, Long lastId);
+
+	Boolean bookmark(BookmarkNewDto dto);
+
+	List<BookmarkVo> getBookmarks(Long lastId);
+
+	Boolean removeBookmark(BookmarkNewDto dto);
 }

@@ -23,7 +23,7 @@ import com.ety.natively.service.IUserService;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.JwtUtils;
 import com.ety.natively.utils.MinioUtils;
-import com.ety.natively.utils.TimezoneUtil;
+import com.ety.natively.utils.I18NUtil;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.http.HttpTransport;
@@ -134,7 +134,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		redisTemplate.opsForValue().set(RedisConstant.USER_REFRESH_TOKEN_PREFIX + refreshToken, String.valueOf(user.getId()),
 				Constant.REFRESH_TOKEN_TTL, TimeUnit.SECONDS);
 
-		return new LoginVo(accessToken, refreshToken);
+		return new LoginVo(accessToken, refreshToken, user.getId());
 	}
 
 	@Override
@@ -221,7 +221,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		redisTemplate.opsForValue().set(RedisConstant.USER_REFRESH_TOKEN_PREFIX + refreshToken2, userIdStr,
 				Constant.REFRESH_TOKEN_TTL, TimeUnit.SECONDS);
 		//返回
-		return new LoginVo(accessToken2, refreshToken2);
+		return new LoginVo(accessToken2, refreshToken2, userId);
 	}
 
 	@Override
@@ -250,8 +250,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
 		}
 		user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
-		TimezoneUtil.adjustCreateTimeTimezone(user);
-		TimezoneUtil.adjustUpdateTimeTimezone(user);
+		I18NUtil.adjustCreateTimeTimezone(user);
+		I18NUtil.adjustUpdateTimeTimezone(user);
 		return user;
 	}
 
@@ -303,8 +303,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 				.in(User::getId, ids)
 				.list();
 		users.forEach(user -> user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar())));
-		TimezoneUtil.adjustCreateTimeTimezone(users);
-		TimezoneUtil.adjustUpdateTimeTimezone(users);
+		I18NUtil.adjustCreateTimeTimezone(users);
+		I18NUtil.adjustUpdateTimeTimezone(users);
 		return users;
 	}
 

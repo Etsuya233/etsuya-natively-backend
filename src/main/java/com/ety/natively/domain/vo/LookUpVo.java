@@ -7,8 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class LoginVo {
-	private String accessToken;
-	private String refreshToken;
-	private Long userId;
+public class LookUpVo {
+	private String translation;
+	private String explanation;
 }

@@ -3,16 +3,16 @@ package com.ety.natively.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.ety.natively.constant.BookmarkType;
 import com.ety.natively.constant.MinioConstant;
 import com.ety.natively.constant.PostType;
+import com.ety.natively.domain.dto.BookmarkNewDto;
 import com.ety.natively.domain.dto.CommentDto;
 import com.ety.natively.domain.dto.PostDto;
 import com.ety.natively.domain.dto.VoteDto;
 import com.ety.natively.domain.po.*;
-import com.ety.natively.domain.vo.AttachmentVo;
-import com.ety.natively.domain.vo.CommentVo;
-import com.ety.natively.domain.vo.PostInfoVo;
-import com.ety.natively.domain.vo.PostVo;
+import com.ety.natively.domain.vo.*;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
 import com.ety.natively.mapper.PostMapper;
@@ -21,17 +21,14 @@ import com.ety.natively.service.*;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.MinioUtils;
-import com.ety.natively.utils.TimezoneUtil;
+import com.ety.natively.utils.I18NUtil;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -57,6 +54,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 	private final MinioClient minioClient;
 	private final IAttachmentService attachmentService;
 	private final MinioUtils minioUtils;
+	private final IBookmarkService bookmarkService;
 
 	@Override
 	public Long createPost(PostDto dto) {
@@ -115,7 +113,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		Map<Long, User> userMap = userService.getUserByIds(userIds)
 				.stream()
 				.collect(Collectors.toMap(User::getId, Function.identity()));
-		TimezoneUtil.adjustCreateTimeTimezone(posts);
+		I18NUtil.adjustCreateTimeTimezone(posts);
 		Long userId = BaseContext.getUserId();
 		Map<Long, Vote> voteMap = (userId != null)?
 				voteService.lambdaQuery()
@@ -204,7 +202,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		postVo.setUpvote(summary.getUpvoteCount());
 		postVo.setDownvote(summary.getDownvoteCount());
 		postVo.setCommentCount(summary.getCommentCount());
-		TimezoneUtil.adjustCreateTimeTimezone(post);
+		I18NUtil.adjustCreateTimeTimezone(post);
 		postVo.setCreateTime(post.getCreateTime());
 
 		//vote TODO 考虑userId为空
@@ -214,6 +212,16 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				.one();
 		if(vote != null){
 			postVo.setVote(vote.getType());
+		}
+
+		//bookmark
+		Long count = bookmarkService.lambdaQuery()
+				.eq(Bookmark::getUserId, userId)
+				.eq(Bookmark::getReferenceId, id)
+				.eq(Bookmark::getType, BookmarkType.POST)
+				.count();
+		if(count > 0){
+			postVo.setBookmarked(1);
 		}
 
 		//attachment
@@ -242,23 +250,42 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 
 	@Override
 	public List<CommentVo> getPostComment(Long id, Long lastId) {
+		Long userId = BaseContext.getUserId();
+
 		List<Comment> comments = commentService.lambdaQuery()
 				.eq(Comment::getPostId, id)
-				.isNull(Comment::getParentId)
 				.gt(lastId != null, Comment::getId, lastId)
 				.orderByAsc(Comment::getId)
 				.last("limit 10")
 				.list();
 		if(CollUtil.isEmpty(comments)) return List.of();
-		TimezoneUtil.adjustCreateTimeTimezone(comments);
-		List<Long> ids = comments.stream()
+		I18NUtil.adjustCreateTimeTimezone(comments);
+		List<Long> ids = new ArrayList<>(comments.stream()
 				.map(Comment::getId)
-				.toList();
+				.toList());
+		Set<Long> bookmarked = bookmarkService.lambdaQuery()
+				.in(Bookmark::getReferenceId, ids)
+				.eq(Bookmark::getType, BookmarkType.COMMENT)
+				.eq(userId != null, Bookmark::getUserId, userId)
+				.select(Bookmark::getReferenceId)
+				.list()
+				.stream()
+				.map(Bookmark::getReferenceId)
+				.collect(Collectors.toSet());
 		Map<Long, CommentSummary> summaryMap = commentSummaryService.lambdaQuery()
 				.in(CommentSummary::getCommentId, ids)
 				.list()
 				.stream()
 				.collect(Collectors.toMap(CommentSummary::getCommentId, Function.identity()));
+		List<Long> parentIds = comments.stream()
+				.map(Comment::getParentId)
+				.toList();
+		Map<Long, Comment> parentMap = commentService.lambdaQuery()
+				.in(Comment::getId, parentIds)
+				.list()
+				.stream()
+				.collect(Collectors.toMap(Comment::getId, Function.identity()));
+		ids.addAll(parentIds); //!!!
 		Map<Long, List<Attachment>> attachmentMap = attachmentService.lambdaQuery()
 				.in(Attachment::getCommentId, ids)
 				.list()
@@ -269,7 +296,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				.toList();
 		Map<Long, User> userMap = userService.getUserByIds(userIds).stream()
 				.collect(Collectors.toMap(User::getId, Function.identity()));
-		Long userId = BaseContext.getUserId();
 		Map<Long, Vote> voteMap = (userId != null)?
 				voteService.lambdaQuery()
 						.in(Vote::getCommentId, ids)
@@ -284,7 +310,22 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 			commentVo.setId(comment.getId());
 			commentVo.setContent(comment.getContent());
 			commentVo.setCreateTime(comment.getCreateTime());
-			commentVo.setParentId(commentVo.getParentId());
+			commentVo.setParentId(comment.getParentId());
+
+			//if parentId todo null 处理
+			if(comment.getParentId() != null){
+				Comment parent = parentMap.get(comment.getParentId());
+				commentVo.setParentUserId(parent.getUserId());
+				commentVo.setParentUserNickname(userMap.get(parent.getUserId()).getNickname());
+				int length = parent.getContent().length();
+				boolean hasMore = false;
+				if(length > 200){
+					length = 200;
+					hasMore = true;
+				}
+				commentVo.setParentHasMore(hasMore);
+				commentVo.setParentContent(parent.getContent().substring(0, length));
+			}
 
 			//user info
 			commentVo.setUserId(comment.getUserId());
@@ -292,6 +333,11 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				User user = userMap.get(comment.getUserId());
 				commentVo.setNickname(user.getNickname());
 				commentVo.setAvatar(user.getAvatar());
+			}
+
+			//bookmark
+			if(bookmarked.contains(comment.getId())){
+				commentVo.setBookmarked(1);
 			}
 
 			//summary
@@ -456,7 +502,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				throw new BaseException(ExceptionEnum.POST_TITLE_EMPTY);
 			}
 		}
-		if(title.length() > 255){
+		if(title != null && title.length() > 255){
 			throw new BaseException(ExceptionEnum.POST_TITLE_RULE);
 		}
 		if(content.length() > 65535){
@@ -553,15 +599,30 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 						.update();
 			} else {
 				commentSummaryService.lambdaUpdate()
-						.eq(dto.getPost(), CommentSummary::getCommentId, dto.getId())
+						.eq(!dto.getPost(), CommentSummary::getCommentId, dto.getId())
 						.setIncrBy(dto.getType() == 1, CommentSummary::getUpvoteCount, 1)
 						.setIncrBy(dto.getType() == -1, CommentSummary::getDownvoteCount, 1)
 						.update();
 			}
 		} else {
-			if(vote.getType().equals(dto.getType())){ //不可重复
-				return false;
+			if(vote.getType().equals(dto.getType())){ //重复就相反
+				voteService.removeById(vote.getId());
+				if(dto.getPost()){
+					postSummaryService.lambdaUpdate()
+							.eq(dto.getPost(), PostSummary::getPostId, dto.getId())
+							.setIncrBy(dto.getType() == 1, PostSummary::getUpvoteCount, -1)
+							.setIncrBy(dto.getType() == -1, PostSummary::getUpvoteCount, -1)
+							.update();
+				} else {
+					commentSummaryService.lambdaUpdate()
+							.eq(dto.getPost(), CommentSummary::getCommentId, dto.getId())
+							.setIncrBy(dto.getType() == 1, CommentSummary::getUpvoteCount, 1)
+							.setIncrBy(dto.getType() == 1, CommentSummary::getDownvoteCount, -1)
+							.update();
+				}
+				return true;
 			}
+			//否则这里就是点了相反的
 			vote.setType(dto.getType());
 			voteService.updateById(vote);
 			if(dto.getPost()){
@@ -584,6 +645,201 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		}
 		return true;
 	}
+
+	@Override
+	public List<PostInfoVo> getUserPosts(Long userId, Long lastId) {
+		List<Post> posts = this.lambdaQuery()
+				.eq(Post::getUserId, userId)
+				.lt(lastId != null, Post::getId, lastId)
+				.last("limit 10")
+				.list();
+		if(CollUtil.isEmpty(posts)) return List.of();
+		List<Long> postIds = posts.stream()
+				.map(Post::getId)
+				.toList();
+		Map<Long, PostSummary> postSummaryMap = postSummaryService.lambdaQuery()
+				.in(PostSummary::getPostId, postIds)
+				.list()
+				.stream()
+				.collect(Collectors.toMap(PostSummary::getPostId, Function.identity()));
+		Map<Long, List<Attachment>> attachmentMap = attachmentService.lambdaQuery()
+				.in(Attachment::getPostId, postIds)
+				.list()
+				.stream()
+				.collect(Collectors.groupingBy(Attachment::getPostId));
+		Long currentUserId = BaseContext.getUserId();
+		Map<Long, Vote> voteMap = (userId != null)?
+				voteService.lambdaQuery()
+						.in(Vote::getPostId, postIds)
+						.eq(Vote::getUserId, currentUserId)
+						.list()
+						.stream()
+						.collect(Collectors.toMap(Vote::getPostId, Function.identity()))
+				: new HashMap<>();
+		I18NUtil.adjustCreateTimeTimezone(posts);
+		return posts.stream().map(post -> {
+
+			//basic info
+			PostInfoVo dto = new PostInfoVo();
+			dto.setId(post.getId());
+			dto.setTitle(post.getTitle());
+			if(post.getContent().length() > 200){
+				dto.setContentHasMore(true);
+			}
+			dto.setContent(post.getContent().substring(0, Math.min(200, post.getContent().length())));
+			dto.setType(post.getType());
+
+			//user info ignore
+
+			//summary info
+			dto.setUpvote(postSummaryMap.get(post.getId()).getUpvoteCount());
+			dto.setDownvote(postSummaryMap.get(post.getId()).getDownvoteCount());
+			dto.setCommentCount(postSummaryMap.get(post.getId()).getCommentCount());
+			dto.setCreateTime(post.getCreateTime());
+
+			//vote
+			Vote vote = voteMap.get(post.getId());
+			if(vote != null){
+				dto.setVote(vote.getType());
+			};
+
+			//attachments
+			List<Attachment> attachments = attachmentMap.get(post.getId());
+			List<AttachmentVo> images = new ArrayList<>();
+			if(attachments != null){
+				attachments.forEach(attachment -> {
+					AttachmentVo attachmentVo = new AttachmentVo();
+					attachmentVo.setName(attachment.getNo() + getFileExtension(attachment.getPath()));
+					attachmentVo.setSize(attachment.getSize());
+					if(attachment.getType() == 1){
+						attachmentVo.setUrl(minioUtils.generateFileUrl(MinioConstant.POST_IMAGES_BUCKET, attachment.getPath()));
+						images.add(attachmentVo);
+					} else {
+						String url = minioUtils.generateFileUrl(MinioConstant.POST_VOICES_BUCKET, attachment.getPath());
+						attachmentVo.setUrl(url);
+						dto.setVoice(attachmentVo);
+					}
+				});
+			}
+			dto.setImages(images);
+
+			return dto;
+		}).toList();
+	}
+
+	@Override
+	public Boolean bookmark(BookmarkNewDto dto) {
+		Long userId = BaseContext.getUserId();
+		Long referenceId = dto.getId();
+		Integer type = dto.getType();
+
+		return bookmarkService.save(new Bookmark(null, referenceId, userId, type, null, null));
+	}
+
+	@Override
+	public List<BookmarkVo> getBookmarks(Long lastId) {
+		Long userId = BaseContext.getUserId();
+		List<Bookmark> bookmarks = bookmarkService.lambdaQuery()
+				.eq(Bookmark::getUserId, userId)
+				.orderByDesc(Bookmark::getId)
+				.lt(lastId != null, Bookmark::getId, lastId)
+				.last("limit 10")
+				.list();
+
+		//posts
+		List<Long> postIds = bookmarks.stream()
+				.filter(b -> b.getType().equals(BookmarkType.POST))
+				.map(Bookmark::getReferenceId)
+				.toList();
+		Map<Long, Post> postMap = postIds.isEmpty()? Map.of():
+				this.lambdaQuery()
+						.in(Post::getId, postIds)
+						.list()
+						.stream().collect(Collectors.toMap(Post::getId, Function.identity()));
+
+		//comments
+		List<Long> bookmarkIds = bookmarks.stream()
+				.filter(b -> b.getType().equals(BookmarkType.COMMENT))
+				.map(Bookmark::getReferenceId)
+				.toList();
+		Map<Long, Comment> commentMap = bookmarkIds.isEmpty()? Map.of():
+				commentService.lambdaQuery()
+						.in(Comment::getId, bookmarkIds)
+						.list()
+						.stream().collect(Collectors.toMap(Comment::getId, Function.identity()));
+
+		//user
+		List<Long> userIds = new ArrayList<>(
+				postMap.values()
+						.stream()
+						.map(Post::getUserId)
+						.toList()
+		);
+		userIds.addAll(
+				commentMap.values()
+						.stream()
+						.map(Comment::getUserId)
+						.toList()
+		);
+		Map<Long, User> userMap = userService.getUserByIds(userIds)
+				.stream()
+				.collect(Collectors.toMap(User::getId, Function.identity()));
+
+		//ret
+		return bookmarks.stream().map(bookmark -> {
+			BookmarkVo vo = new BookmarkVo();
+			vo.setType(bookmark.getType());
+			if(bookmark.getType().equals(BookmarkType.POST)){
+				Post post = postMap.get(bookmark.getReferenceId());
+				vo.setReferenceId(post.getId());
+				vo.setId(bookmark.getId());
+				int length = post.getContent().length();
+				if(length > 200){
+					vo.setContentHasMore(true);
+					length = 200;
+				}
+				vo.setContent(post.getContent().substring(0, length));
+				vo.setTitle(post.getTitle());
+				vo.setCreateTime(post.getCreateTime());
+				User user;
+				if((user = userMap.get(post.getUserId())) != null){
+					vo.setUserId(post.getUserId());
+					vo.setAvatar(user.getAvatar());
+					vo.setNickname(user.getNickname());
+				}
+			} else {
+				Comment comment = commentMap.get(bookmark.getReferenceId());
+				vo.setReferenceId(comment.getId());
+				vo.setId(comment.getId());
+				int length = comment.getContent().length();
+				if(length > 200){
+					vo.setContentHasMore(true);
+					length = 200;
+				}
+				vo.setContent(comment.getContent().substring(0, length));
+				vo.setCreateTime(comment.getCreateTime());
+				User user;
+				if((user = userMap.get(comment.getUserId())) != null){
+					vo.setUserId(comment.getUserId());
+					vo.setAvatar(user.getAvatar());
+					vo.setNickname(user.getNickname());
+				}
+			}
+			return vo;
+		}).filter(vo -> vo.getUserId() != null).toList();
+	}
+
+	@Override
+	public Boolean removeBookmark(BookmarkNewDto dto) {
+		Long userId = BaseContext.getUserId();
+		return bookmarkService.remove(
+				new LambdaQueryWrapper<Bookmark>()
+						.eq(Bookmark::getUserId, userId)
+						.eq(Bookmark::getReferenceId, dto.getId())
+						.eq(Bookmark::getType, dto.getType())
+		);
+	}
+
 
 	private String getFileExtension(String fileName){
 		if (fileName != null && fileName.contains(".")) {

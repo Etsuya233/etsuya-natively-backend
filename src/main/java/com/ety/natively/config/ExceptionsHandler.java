@@ -10,6 +10,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -26,6 +27,7 @@ public class ExceptionsHandler {
 	}
 
 	@ExceptionHandler(BaseException.class)
+	@MessageExceptionHandler(BaseException.class)
 	public R<Void> handleCustomException(BaseException e){
 		log.debug("自定义异常：通用：", e);
 		ExceptionEnum exceptionEnum = e.getExceptionEnum();
@@ -37,6 +39,7 @@ public class ExceptionsHandler {
 	}
 
 	@ExceptionHandler(Exception.class)
+	@MessageExceptionHandler(Exception.class)
 	public R<Void> handleOtherException(Exception e){
 		log.error("其他异常：", e);
 		return R.error(t.get("ex.unknown"));

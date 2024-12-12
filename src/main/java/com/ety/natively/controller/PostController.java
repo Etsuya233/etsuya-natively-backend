@@ -2,10 +2,12 @@ package com.ety.natively.controller;
 
 
 import com.ety.natively.domain.R;
+import com.ety.natively.domain.dto.BookmarkNewDto;
 import com.ety.natively.domain.dto.CommentDto;
 import com.ety.natively.domain.dto.PostDto;
 import com.ety.natively.domain.dto.VoteDto;
 import com.ety.natively.domain.po.Comment;
+import com.ety.natively.domain.vo.BookmarkVo;
 import com.ety.natively.domain.vo.CommentVo;
 import com.ety.natively.domain.vo.PostInfoVo;
 import com.ety.natively.domain.vo.PostVo;
@@ -31,7 +33,6 @@ public class PostController {
 
 	private final IPostService postService;
 
-//	@PostMapping
 	@Deprecated
 	public R<Long> createPost(@RequestBody PostDto dto){
 		Long id = postService.createPost(dto);
@@ -40,7 +41,7 @@ public class PostController {
 
 	@PostMapping
 	public R<Long> createPostNew(
-			@RequestParam("title") String title,
+			@RequestParam(value = "title", required = false) String title,
 			@RequestParam("content") String content,
 			@RequestParam("type") Integer type,
 			@RequestParam(value = "images", required = false) MultipartFile[] images,
@@ -69,6 +70,7 @@ public class PostController {
 		return R.ok(ret);
 	}
 
+	@Deprecated
 	@PostMapping("/comment")
 	public R<CommentVo> addComment(@RequestBody CommentDto dto){
 		CommentVo vo = postService.addComment(dto);
@@ -91,4 +93,30 @@ public class PostController {
 		boolean ret = postService.vote(dto);
 		return R.ok(ret);
 	}
+
+	@GetMapping("/user")
+	public R<List<PostInfoVo>> getUserPosts(@RequestParam("userId") Long userId,
+										@RequestParam(value = "lastId", required = false) Long lastId){
+		List<PostInfoVo> ret = postService.getUserPosts(userId, lastId);
+		return R.ok(ret);
+	}
+
+	@PostMapping("/bookmark")
+	public R<Boolean> bookmark(@RequestBody BookmarkNewDto dto){
+		Boolean ret = postService.bookmark(dto);
+		return R.ok(ret);
+	}
+
+	@GetMapping("/bookmark")
+	public R<List<BookmarkVo>> getBookmarks(@RequestParam(required = false) Long lastId){
+		List<BookmarkVo> ret = postService.getBookmarks(lastId);
+		return R.ok(ret);
+	}
+
+	@DeleteMapping("/bookmark")
+	public R<Boolean> removeBookmark(@RequestBody BookmarkNewDto dto){
+		Boolean ret = postService.removeBookmark(dto);
+		return R.ok(ret);
+	}
+
 }

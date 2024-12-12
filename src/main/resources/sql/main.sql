@@ -15,6 +15,8 @@ create table user (
     timezone varchar(32) comment 'IANA时区',
     avatar varchar(255) comment '头像',
     status int default 1 comment '状态',
+    following int default 0 not null comment '关注数目',
+    followers int default 0 not null comment '粉丝',
     version tinyint default 0 comment '用于强制用户下线等',
     create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
     update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
@@ -134,7 +136,7 @@ create table location_translation (
 create table post (
     id bigint primary key not null comment '帖子ID',
     user_id bigint not null comment '用户ID',
-    title varchar(255) not null comment '标题',
+    title varchar(255) comment '标题',
     content text comment '内容',
     type tinyint not null default 1 comment '类型，普通1，问答2',
     create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
@@ -186,4 +188,48 @@ create table attachment (
     no int not null comment '第几个附件',
     size bigint not null comment '文件大小（字节）',
     create_time datetime(3) default current_timestamp(3) comment '创建时间UTC'
+);
+
+create table bookmark (
+    id bigint primary key not null comment '书签ID',
+    reference_id bigint not null comment '对应收藏内容的ID',
+    user_id bigint not null comment '用户ID',
+    type tinyint not null default 1 comment '1，贴子 2，评论',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间',
+    unique(reference_id, user_id, type)
+);
+
+create table chat_message (
+    id bigint primary key not null comment '消息ID',
+    sender_id bigint not null comment '发送者ID',
+    receiver_id bigint not null comment '接受者ID',
+    type int not null default 1 comment '消息类型（1，文本；2，图片；3，其他）',
+    content text comment '消息内容',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
+);
+
+create table contact (
+    id bigint primary key not null comment '关系ID',
+    user_a_id bigint not null,
+    user_b_id bigint not null,
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
+);
+
+create table conversation (
+    user_a_id bigint not null,
+    user_b_id bigint not null,
+    last_id bigint comment '最后一条消息ID',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间',
+    primary key (user_a_id, user_b_id)
+);
+
+create table chat_unread (
+    sender_id bigint not null,
+    receiver_id bigint not null,
+    count int default 0,
+    unique (sender_id, receiver_id)
 );

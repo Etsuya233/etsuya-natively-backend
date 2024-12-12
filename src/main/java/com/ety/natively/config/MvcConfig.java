@@ -6,9 +6,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -19,16 +21,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class MvcConfig implements WebMvcConfigurer {
 
 	private final UserInfoInterceptor userInfoInterceptor;
-
-//	@Override
-//	public void addCorsMappings(CorsRegistry registry) {
-//		log.info("已配置跨域");
-//		registry.addMapping("/**")
-//				.allowedOriginPatterns("*")
-//				.allowCredentials(true)
-//				.allowedMethods("*")
-//				.maxAge(3600);
-//	}
 
 	@Override
 	public void addInterceptors(InterceptorRegistry registry) {
@@ -56,6 +48,23 @@ public class MvcConfig implements WebMvcConfigurer {
 	@Bean
 	public RestTemplate restTemplate(){
 		return new RestTemplate();
+	}
+
+	@Bean
+	public ThreadPoolTaskExecutor taskExecutor() {
+		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+		executor.setCorePoolSize(5);  // 最小线程数
+		executor.setMaxPoolSize(10);  // 最大线程数
+		executor.setQueueCapacity(100);  // 队列容量
+		executor.setThreadNamePrefix("async-executor-");
+		executor.initialize();
+		return executor;
+	}
+
+	@Override
+	public void configureAsyncSupport(AsyncSupportConfigurer configurer) {
+		configurer.setTaskExecutor(taskExecutor());
+		configurer.setDefaultTimeout(300000);  // 默认超时时间，单位是毫秒
 	}
 
 }

@@ -1,6 +1,6 @@
 package com.ety.natively.service;
 
-import com.ety.natively.domain.po.AiModel;
+import com.ety.natively.domain.po.ChatUnread;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
@@ -9,8 +9,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * </p>
  *
  * @author Etsuya
- * @since 2024-10-31
+ * @since 2024-12-06
  */
-public interface IAiModelService extends IService<AiModel> {
+public interface IChatUnreadService extends IService<ChatUnread> {
 
 }

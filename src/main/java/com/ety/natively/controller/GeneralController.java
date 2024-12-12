@@ -15,19 +15,15 @@ import java.util.List;
 @RestController
 @RequestMapping("/general")
 @RequiredArgsConstructor
+@Deprecated
 public class GeneralController {
 
 	private final GeneralService generalService;
 
+	@Deprecated
 	@GetMapping("/location/{lang}")
 	public R<List<Location>> getLocations(@PathVariable(value = "lang", required = false) String lang){
 		List<Location> ret = generalService.getLocations(lang);
-		return R.ok(ret);
-	}
-
-	@GetMapping("/language/{lang}")
-	public R<List<Language>> getLanguages(@PathVariable(value = "lang", required = false) String lang){
-		List<Language> ret = generalService.getLanguages(lang);
 		return R.ok(ret);
 	}
 

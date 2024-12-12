@@ -11,6 +11,9 @@ public interface RedisConstant {
 	String USER_VERSION_TOKEN_PREFIX = "user:version:";
 	String USER_OAUTH = "user:oauth:";
 
+	String SOCKET_IO_USER_TO_UUID = "socketio:user";
+	String SOCKET_IO_UUID_TO_USER = "socketio:uuid";
+
 	/**
 	 * 过期时间（秒）
 	 */

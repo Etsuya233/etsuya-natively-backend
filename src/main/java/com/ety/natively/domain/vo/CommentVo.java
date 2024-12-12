@@ -11,13 +11,18 @@ public class CommentVo {
 	private String content;
 	private String nickname;
 	private Long userId;
-	private String parentId;
+	private Long parentId;
+	private Long parentUserId;
+	private String parentUserNickname;
+	private String parentContent;
+	private Boolean parentHasMore;
 	private String avatar;
 	private LocalDateTime createTime;
 	private Long upvote = 0L;
 	private Long downvote = 0L;
 	private Integer vote;
 	private Long commentCount = 0L;
+	private Integer bookmarked;
 	private List<AttachmentVo> images;
 	private AttachmentVo voice;
 }

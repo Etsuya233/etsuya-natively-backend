@@ -7,11 +7,8 @@ import java.io.Serial;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
-
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
@@ -20,78 +17,42 @@ import lombok.experimental.Accessors;
  * </p>
  *
  * @author Etsuya
- * @since 2024-11-01
+ * @since 2024-12-04
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("user")
-@NoArgsConstructor
-@AllArgsConstructor
-public class User implements Serializable {
+@TableName("chat_message")
+public class ChatMessage implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     /**
-     * 用户ID
+     * 消息ID
      */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /**
-     * 用户名
+     * 发送者ID
      */
-    private String username;
+    private Long senderId;
 
     /**
-     * 昵称
+     * 接受者ID
      */
-    private String nickname;
+    private Long receiverId;
 
     /**
-     * 密码
+     * 消息类型（1，文本；2，图片；3，其他）
      */
-    private String password;
+    private Integer type;
 
     /**
-     * 邮箱
+     * 消息内容
      */
-    private String email;
-
-    /**
-     * 性别 0 女 1 男 2 其他
-     */
-    private Integer gender;
-
-    /**
-     * 国家或地区 ISO 3166-1
-     */
-    private String location;
-
-    /**
-     * IANA时区
-     */
-    private String timezone;
-
-    /**
-     * 头像
-     */
-    private String avatar;
-
-    /**
-     * 状态
-     */
-    private Integer status;
-
-    private Integer following;
-
-    private Integer followers;
-
-    /**
-     * 用于强制用户下线等
-     */
-    private Integer version;
+    private String content;
 
     /**
      * 创建时间UTC

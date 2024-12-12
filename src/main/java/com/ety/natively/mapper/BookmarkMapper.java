@@ -1,6 +1,6 @@
 package com.ety.natively.mapper;
 
-import com.ety.natively.domain.po.AiModel;
+import com.ety.natively.domain.po.Bookmark;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**
@@ -9,8 +9,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  * </p>
  *
  * @author Etsuya
- * @since 2024-10-31
+ * @since 2024-12-02
  */
-public interface AiModelMapper extends BaseMapper<AiModel> {
+public interface BookmarkMapper extends BaseMapper<Bookmark> {
 
 }

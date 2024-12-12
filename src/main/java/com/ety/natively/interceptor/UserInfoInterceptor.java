@@ -9,6 +9,7 @@ import com.ety.natively.mapper.UserMapper;
 import com.ety.natively.properties.AuthProperties;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.JwtUtils;
+import com.ety.natively.utils.UserUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class UserInfoInterceptor implements HandlerInterceptor {
 	private final AntPathMatcher antPathMatcher = new AntPathMatcher();
 	private final StringRedisTemplate redisTemplate;
 	private final UserMapper userMapper;
+	private final UserUtils userUtils;
 
 	@Override
 	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -52,29 +54,7 @@ public class UserInfoInterceptor implements HandlerInterceptor {
 
 		String token = header.substring(7); //Bearer ABCDEFG
 
-		//验证Token合法性
-		Map<String, Object> claims;
-		try {
-			claims = jwtUtils.parseToken(token);
-		} catch (Exception e) {
-			throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
-		}
-		Long userId = (Long) claims.get("userId");
-		Integer currentVersion = (Integer) claims.get("version");
-
-		//验证版本合法性
-		String versionStr = redisTemplate.opsForValue().get(RedisConstant.USER_VERSION_TOKEN_PREFIX + userId.toString());
-		Integer version;
-		if(versionStr == null){
-			User user = userMapper.selectById(userId);
-			version = user.getVersion();
-			redisTemplate.opsForValue().set(RedisConstant.USER_VERSION_TOKEN_PREFIX + userId, version.toString());
-		} else {
-			version = Integer.parseInt(versionStr);
-		}
-		if(!version.equals(currentVersion)){
-			throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
-		}
+		Long userId = userUtils.authenticateUser(token);
 
 		//获取信息
 		BaseContext.setUserId(userId);

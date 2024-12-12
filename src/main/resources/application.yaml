@@ -52,3 +52,8 @@ natively:
       - /general/location/**
       - /general/language/**
       - /user/oauth2/**
+      - /test/**
+      - /ws/**
+      - /chat/connect/**
+      - /language/lang/**
+      - /language/explanation/stream

@@ -9,7 +9,5 @@ import java.util.Set;
 public interface GeneralService {
 	List<Location> getLocations(String lang);
 
-	List<Language> getLanguages(String lang);
-
 	Set<String> getLanguageCodes();
 }

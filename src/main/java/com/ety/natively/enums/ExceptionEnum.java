@@ -21,7 +21,9 @@ public enum ExceptionEnum {
 	POST_TITLE_RULE(3002, 200, "post.titleRule"),
 	POST_NOT_EXIST(3003, 200, "post.notExist"),
 	POST_IMAGE_UPLOAD_ERROR(3004, 200, "post.imageUploadError"),
-	POST_VOICE_UPLOAD_ERROR(3005, 200, "post.voiceUploadError");
+	POST_VOICE_UPLOAD_ERROR(3005, 200, "post.voiceUploadError"),
+
+	CHAT_NOT_CONTACT(4001, 200, "chat.notContact");
 
 	final int errorCode;
 	final int httpCode;

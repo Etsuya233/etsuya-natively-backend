@@ -2,24 +2,19 @@ package com.ety.natively.domain.vo;
 
 import lombok.Data;
 
-import java.util.List;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
-public class PostVo {
+public class BookmarkVo {
 	private Long id;
+	private Long referenceId;
+	private Integer type;
 	private String title;
 	private String content;
 	private Long userId;
-	private Integer type;
 	private String nickname;
 	private String avatar;
-	private Long upvote;
-	private Long downvote;
-	private Integer vote;
-	private Long commentCount;
-	private Integer bookmarked;
 	private LocalDateTime createTime;
-	private List<AttachmentVo> images;
-	private AttachmentVo voice;
+	private Boolean contentHasMore;
 }

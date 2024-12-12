@@ -20,78 +20,39 @@ import lombok.experimental.Accessors;
  * </p>
  *
  * @author Etsuya
- * @since 2024-11-01
+ * @since 2024-12-02
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("user")
+@TableName("bookmark")
 @NoArgsConstructor
 @AllArgsConstructor
-public class User implements Serializable {
+public class Bookmark implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     /**
-     * 用户ID
+     * 书签ID
      */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /**
-     * 用户名
+     * 对应收藏内容的ID
      */
-    private String username;
+    private Long referenceId;
 
     /**
-     * 昵称
+     * 用户ID
      */
-    private String nickname;
+    private Long userId;
 
     /**
-     * 密码
+     * 1，贴子 2，评论
      */
-    private String password;
-
-    /**
-     * 邮箱
-     */
-    private String email;
-
-    /**
-     * 性别 0 女 1 男 2 其他
-     */
-    private Integer gender;
-
-    /**
-     * 国家或地区 ISO 3166-1
-     */
-    private String location;
-
-    /**
-     * IANA时区
-     */
-    private String timezone;
-
-    /**
-     * 头像
-     */
-    private String avatar;
-
-    /**
-     * 状态
-     */
-    private Integer status;
-
-    private Integer following;
-
-    private Integer followers;
-
-    /**
-     * 用于强制用户下线等
-     */
-    private Integer version;
+    private Integer type;
 
     /**
      * 创建时间UTC
