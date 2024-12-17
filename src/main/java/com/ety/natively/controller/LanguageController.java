@@ -8,7 +8,10 @@ import com.ety.natively.domain.vo.ExplanationVo;
 import com.ety.natively.domain.vo.TranslationVo;
 import com.ety.natively.service.LanguageService;
 import lombok.RequiredArgsConstructor;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -20,6 +23,7 @@ import java.util.List;
 public class LanguageController {
 
 	private final LanguageService languageService;
+	private final SqlSessionFactory sqlSessionFactory;
 
 	@GetMapping("/lang/{lang}")
 	public R<List<Language>> getLanguages(@PathVariable(value = "lang", required = false) String lang){
@@ -33,12 +37,14 @@ public class LanguageController {
 		return R.ok(ret);
 	}
 
+	@Deprecated
 	@PostMapping("/translation")
 	public R<TranslationVo> getTranslation(@RequestBody LookUpDto dto){
 		TranslationVo vo = languageService.getTranslation(dto);
 		return R.ok(vo);
 	}
 
+	@Deprecated
 	@PostMapping("/explanation")
 	public R<ExplanationVo> getExplanation(@RequestBody LookUpDto dto){
 		ExplanationVo ret = languageService.getExplanation(dto);

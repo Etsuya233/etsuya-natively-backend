@@ -129,7 +129,7 @@ public class LanguageServiceImpl implements LanguageService {
 			你是一个优秀的外语教师，能够地道的说各门语言。
 			你现在面对的是一个学习某门外语的学生，该学生可能看不太懂这段话。现在请你用 {language} 解释我给出的内容。主要聚焦于语言学习上。
 			规则：你需要带着他分析这段话，并解释在分析过程中碰到的在语言层面上的重难点。如果文本太长（超过150个单词），你只需要分析较为重要的地方，最后，给出学习的建议。
-			你需要返回Markdown格式的内容。
+			你需要返回Markdown格式的内容。不要返回代码块。
 			""";
 	private final SystemPromptTemplate EXPLANATION_SYSTEM_PROMPT = new SystemPromptTemplate(EXPLANATION_SYSTEM_LANGUAGE);
 	private final ChatOptions EXPLANATION_OPTIONS = OpenAiChatOptions.builder()

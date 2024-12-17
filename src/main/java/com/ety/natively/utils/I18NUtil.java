@@ -3,12 +3,16 @@ package com.ety.natively.utils;
 import cn.hutool.core.collection.CollUtil;
 import com.ety.natively.domain.po.Language;
 import com.ety.natively.domain.po.Location;
+import com.github.pemistahl.lingua.api.LanguageDetector;
+import com.github.pemistahl.lingua.api.LanguageDetectorBuilder;
+import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Method;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+@Slf4j
 public class I18NUtil {
 
 	/**
@@ -274,6 +278,24 @@ public class I18NUtil {
 			case SUNDAY -> "일요일";
 			default -> "";
 		};
+	}
+
+	private static final LanguageDetector detector = LanguageDetectorBuilder
+			.fromLanguages(com.github.pemistahl.lingua.api.Language.ENGLISH, com.github.pemistahl.lingua.api.Language.CHINESE, com.github.pemistahl.lingua.api.Language.FRENCH,
+					com.github.pemistahl.lingua.api.Language.JAPANESE, com.github.pemistahl.lingua.api.Language.KOREAN)
+			.build();
+
+	public static Locale getContentLanguage(String content){
+		com.github.pemistahl.lingua.api.Language language = detector.detectLanguageOf(content);
+		Locale ret = switch (language){
+			case CHINESE -> Locale.CHINESE;
+			case JAPANESE -> Locale.JAPAN;
+			case KOREAN -> Locale.KOREAN;
+			case FRENCH -> Locale.FRENCH;
+			default -> Locale.ENGLISH;
+		};
+		log.debug("Detect: {}: {}", language, content);
+		return ret;
 	}
 
 }
