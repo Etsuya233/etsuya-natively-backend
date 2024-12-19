@@ -62,29 +62,28 @@ public class NaviServiceImpl implements NaviService {
 	@Async
 	@Override
 	public CompletableFuture<Void> speak(NaviSpeakDto dto, HttpServletResponse response) {
-		String content = dto.getContent();
-
-		SpeechConfig speechConfig = SpeechConfig.fromSubscription(azureProperties.getKey(), azureProperties.getRegion());
-		speechConfig.setSpeechSynthesisVoiceName(this.getContentModel(content));
-		speechConfig.setSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Ogg16Khz16BitMonoOpus);
-
-		response.setContentType("audio/ogg");
-		response.setHeader("Transfer-Encoding", "chunked");
-		response.setStatus(HttpServletResponse.SC_OK);
-
-		SpeechSynthesizer synthesizer = new SpeechSynthesizer(speechConfig, null);
-
-		synthesizer.SynthesisStarted.addEventListener((o, e) -> {
-			log.debug("Synthesizer started");
-		});
-
-		synthesizer.SynthesisCompleted.addEventListener((o, e) -> {
-			log.debug("Synthesizer completed");
-		});
-
-		Future<SpeechSynthesisResult> future = synthesizer.SpeakTextAsync(content);
-
 		return CompletableFuture.runAsync(() -> {
+			String content = dto.getContent();
+
+			SpeechConfig speechConfig = SpeechConfig.fromSubscription(azureProperties.getKey(), azureProperties.getRegion());
+			speechConfig.setSpeechSynthesisVoiceName(this.getContentModel(content));
+			speechConfig.setSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Ogg16Khz16BitMonoOpus);
+
+			response.setContentType("audio/ogg");
+			response.setHeader("Transfer-Encoding", "chunked");
+			response.setStatus(HttpServletResponse.SC_OK);
+
+			SpeechSynthesizer synthesizer = new SpeechSynthesizer(speechConfig, null);
+
+			synthesizer.SynthesisStarted.addEventListener((o, e) -> {
+				log.debug("Synthesizer started");
+			});
+			synthesizer.SynthesisCompleted.addEventListener((o, e) -> {
+				log.debug("Synthesizer completed");
+			});
+
+			Future<SpeechSynthesisResult> future = synthesizer.SpeakTextAsync(content);
+
 			try {
 				ServletOutputStream os = response.getOutputStream();
 				SpeechSynthesisResult result = future.get();
