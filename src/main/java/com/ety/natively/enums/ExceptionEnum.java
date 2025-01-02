@@ -22,6 +22,8 @@ public enum ExceptionEnum {
 	POST_NOT_EXIST(3003, 200, "post.notExist"),
 	POST_IMAGE_UPLOAD_ERROR(3004, 200, "post.imageUploadError"),
 	POST_VOICE_UPLOAD_ERROR(3005, 200, "post.voiceUploadError"),
+	USER_CANNOT_FOLLOW_WHEN_YOU_BLOCKED_SOMEONE(3006, 200, "user.cannotFollowWhenYouBlockedSomeone"),
+	USER_YOU_ARE_BLOCKED(3007, 200, "user.youAreBlocked"),
 
 	CHAT_NOT_CONTACT(4001, 200, "chat.notContact");
 

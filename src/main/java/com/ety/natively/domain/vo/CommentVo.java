@@ -11,6 +11,7 @@ public class CommentVo {
 	private String content;
 	private String nickname;
 	private Long userId;
+	private List<UserLanguageVo> userLanguages;
 	private Long parentId;
 	private Long parentUserId;
 	private String parentUserNickname;

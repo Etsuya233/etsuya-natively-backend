@@ -1,22 +1,22 @@
 package com.ety.natively.controller;
 
 
+import cn.hutool.http.ContentType;
 import com.ety.natively.domain.R;
 import com.ety.natively.domain.dto.ClearUnreadDto;
 import com.ety.natively.domain.po.ChatMessage;
 import com.ety.natively.domain.vo.ChatMessageVo;
 import com.ety.natively.domain.vo.ConversationVo;
 import com.ety.natively.domain.vo.LookUpVo;
+import com.ety.natively.domain.vo.UserVo;
 import com.ety.natively.service.IChatMessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.util.List;
@@ -61,6 +61,15 @@ public class ChatController {
 													 @RequestParam(required = false) String lastId){
 		List<ChatMessageVo> ret = chatMessageService.loadMoreOldMessage(userId, lastId);
 		return R.ok(ret);
+	}
+
+	@PostMapping("/file")
+	public R<Void> sendFile(
+			@RequestParam(value = "file", required = false) MultipartFile file,
+			@RequestParam(value = "type", required = true) Integer type,
+			@RequestParam(name = "receiverId", required = true) Long receiverId){
+		chatMessageService.sendFile(file, type, receiverId);
+		return R.ok();
 	}
 
 }

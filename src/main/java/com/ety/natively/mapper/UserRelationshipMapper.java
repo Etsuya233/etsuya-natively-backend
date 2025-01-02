@@ -1,6 +1,6 @@
 package com.ety.natively.mapper;
 
-import com.ety.natively.domain.po.Contact;
+import com.ety.natively.domain.po.UserRelationship;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 
 /**
@@ -9,8 +9,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  * </p>
  *
  * @author Etsuya
- * @since 2024-12-04
+ * @since 2025-01-01
  */
-public interface ContactMapper extends BaseMapper<Contact> {
+public interface UserRelationshipMapper extends BaseMapper<UserRelationship> {
 
 }

@@ -3,8 +3,10 @@ package com.ety.natively.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
+import com.ety.natively.domain.vo.FollowVo;
 import com.ety.natively.domain.vo.LoginVo;
 import com.ety.natively.domain.vo.OAuth2LoginVo;
+import com.ety.natively.domain.vo.UserVo;
 
 import java.util.List;
 
@@ -24,11 +26,11 @@ public interface IUserService extends IService<User> {
 
 	LoginVo refreshUserToken(UserRefreshDto dto);
 
-	User getCurrent();
+	UserVo getCurrent();
 
-	User getUserInfo(Long id);
+	UserVo getUserInfo(Long id);
 
-	User getUserById(Long id);
+	UserVo getUserInfoWithExtra(Long id);
 
 	Boolean usernameUnique(String username);
 
@@ -38,5 +40,11 @@ public interface IUserService extends IService<User> {
 
 	OAuth2LoginVo oAuth2Login(OAuth2Request request);
 
-	List<User> getUserByIds(List<Long> ids);
+	List<UserVo> getUserByIds(List<Long> ids);
+
+	List<UserVo> getContacts(Long lastId);
+
+	boolean checkIsContact(long senderId, long receiverId);
+
+	FollowVo follow(UserFollowDto dto);
 }

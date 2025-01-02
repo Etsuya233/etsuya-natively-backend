@@ -14,6 +14,7 @@ public class PostVo {
 	private Integer type;
 	private String nickname;
 	private String avatar;
+	private List<UserLanguageVo> userLanguages;
 	private Long upvote;
 	private Long downvote;
 	private Integer vote;

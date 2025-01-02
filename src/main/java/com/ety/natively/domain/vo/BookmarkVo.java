@@ -13,6 +13,7 @@ public class BookmarkVo {
 	private String title;
 	private String content;
 	private Long userId;
+	private List<UserLanguageVo> userLanguages;
 	private String nickname;
 	private String avatar;
 	private LocalDateTime createTime;

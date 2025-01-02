@@ -12,6 +12,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * <p>
@@ -27,7 +28,7 @@ import lombok.experimental.Accessors;
 @TableName("user_language")
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserLanguage implements Serializable {
+public class UserLanguage implements Serializable, Comparable<UserLanguage> {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -54,4 +55,14 @@ public class UserLanguage implements Serializable {
     private Integer proficiency;
 
 
+    /**
+     * 从好到坏排
+     * @param o the object to be compared.
+     * @return ？
+     */
+    @Override
+    public int compareTo(@NotNull UserLanguage o) {
+        if(!this.proficiency.equals(o.proficiency)) return o.proficiency - this.proficiency;
+        return this.lang.compareTo(o.lang);
+    }
 }

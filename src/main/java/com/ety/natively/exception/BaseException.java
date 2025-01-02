@@ -8,6 +8,7 @@ import lombok.Getter;
 public class BaseException extends RuntimeException {
 
 	private ExceptionEnum exceptionEnum;
+	private Object[] exceptionArgs;
 
 	public BaseException() {
 		super();
@@ -16,6 +17,12 @@ public class BaseException extends RuntimeException {
 	public BaseException(ExceptionEnum exceptionEnum) {
 		super(exceptionEnum.getErrorMsgKey());
 		this.exceptionEnum = exceptionEnum;
+	}
+
+	public BaseException(ExceptionEnum exceptionEnum, Object... exceptionArgs) {
+		super(exceptionEnum.getErrorMsgKey());
+		this.exceptionEnum = exceptionEnum;
+		this.exceptionArgs = exceptionArgs;
 	}
 
 }

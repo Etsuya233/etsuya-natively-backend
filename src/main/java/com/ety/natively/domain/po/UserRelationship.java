@@ -2,8 +2,9 @@ package com.ety.natively.domain.po;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.IdType;
-import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
+
+import java.io.Serial;
 import java.io.Serializable;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -15,35 +16,28 @@ import lombok.experimental.Accessors;
  * </p>
  *
  * @author Etsuya
- * @since 2024-12-04
+ * @since 2025-01-01
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("contact")
-public class Contact implements Serializable {
+@TableName("user_relationship")
+public class UserRelationship implements Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
-    /**
-     * 关系ID
-     */
-    @TableId(value = "id", type = IdType.AUTO)
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    private Long userAId;
+    private Long followerId;
 
-    private Long userBId;
-
-    /**
-     * 创建时间UTC
-     */
-    private LocalDateTime createTime;
+    private Long followeeId;
 
     /**
-     * 更新时间
+     * 1 关注 2 双向关注 3 屏蔽
      */
-    private LocalDateTime updateTime;
+    private Integer status;
 
 
 }

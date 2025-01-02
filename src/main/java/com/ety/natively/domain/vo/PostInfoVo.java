@@ -11,6 +11,7 @@ public class PostInfoVo {
 	private String title;
 	private String content;
 	private Long userId;
+	private List<UserLanguageVo> userLanguages;
 	private Integer type;
 	private String nickname;
 	private String avatar;

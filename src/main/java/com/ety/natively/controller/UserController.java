@@ -5,8 +5,10 @@ import cn.hutool.json.JSONUtil;
 import com.ety.natively.domain.R;
 import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
+import com.ety.natively.domain.vo.FollowVo;
 import com.ety.natively.domain.vo.LoginVo;
 import com.ety.natively.domain.vo.OAuth2LoginVo;
+import com.ety.natively.domain.vo.UserVo;
 import com.ety.natively.service.IUserService;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.TranslationUtil;
@@ -71,14 +73,14 @@ public class UserController {
 	}
 
 	@GetMapping
-	public R<User> getCurrent(){
-		User user = userService.getCurrent();
+	public R<UserVo> getCurrent(){
+		UserVo user = userService.getCurrent();
 		return R.ok(user);
 	}
 
 	@GetMapping("/{id}")
-	public R<User> getUserInfo(@PathVariable Long id){
-		User user = userService.getUserInfo(id);
+	public R<UserVo> getUserInfo(@PathVariable Long id){
+		UserVo user = userService.getUserInfoWithExtra(id);
 		return R.ok(user);
 	}
 
@@ -115,6 +117,18 @@ public class UserController {
 	@PostMapping("/oauth2")
 	public R<OAuth2LoginVo> oAuth2Login(@RequestBody OAuth2Request request){
 		OAuth2LoginVo ret = userService.oAuth2Login(request);
+		return R.ok(ret);
+	}
+
+	@GetMapping("/contact")
+	public R<List<UserVo>> getContacts(@RequestParam(value = "lastId", required = false) Long lastId){
+		List<UserVo> ret = userService.getContacts(lastId);
+		return R.ok(ret);
+	}
+
+	@PostMapping("/follow")
+	public R<FollowVo> follow(@RequestBody UserFollowDto dto){
+		FollowVo ret = userService.follow(dto);
 		return R.ok(ret);
 	}
 

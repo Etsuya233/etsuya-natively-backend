@@ -9,21 +9,21 @@ import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.po.UserLanguage;
 import com.ety.natively.domain.po.UserOauth;
+import com.ety.natively.domain.po.UserRelationship;
+import com.ety.natively.domain.vo.FollowVo;
 import com.ety.natively.domain.vo.LoginVo;
 import com.ety.natively.domain.vo.OAuth2LoginVo;
+import com.ety.natively.domain.vo.UserVo;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
 import com.ety.natively.mapper.UserLanguageMapper;
 import com.ety.natively.mapper.UserMapper;
 import com.ety.natively.properties.MinioProperties;
 import com.ety.natively.properties.OAuth2Properties;
-import com.ety.natively.service.GeneralService;
-import com.ety.natively.service.IUserOauthService;
-import com.ety.natively.service.IUserService;
+import com.ety.natively.service.*;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.JwtUtils;
 import com.ety.natively.utils.MinioUtils;
-import com.ety.natively.utils.I18NUtil;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.http.HttpTransport;
@@ -55,6 +55,7 @@ import java.net.URLConnection;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -79,6 +80,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	private final MinioProperties minioProperties;
 	private final RestTemplate restTemplate;
 	private final MinioUtils minioUtils;
+	private final IUserLanguageService userLanguageService;
+	private final IUserRelationshipService userRelationshipService;
 
 	private Set<String> languageCodes;
 	private final Set<String> locations = new HashSet<>();
@@ -225,34 +228,66 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	}
 
 	@Override
-	public User getCurrent() {
-		Long userId = BaseContext.getUserId();
-		User user = getUserById(userId);
-		user.setPassword(null);
-		return user;
+	public UserVo getCurrent() {
+		Long id = BaseContext.getUserId();
+		return getUserInfo(id);
 	}
 
 	@Override
-	public User getUserInfo(Long id) {
-		User user = getUserById(id);
+	public UserVo getUserInfo(Long id) {
+		Long userId = BaseContext.getUserId();
+
+		User user = this.getById(id);
+		user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
 		//TODO 这里需要一些隐私设置，比如跟据是否暂时某些信息来屏蔽某些字段
 		user.setPassword(null);
 		user.setEmail(null);
-		return user;
+		user.setVersion(0);
+		// 用户语言信息
+		List<UserLanguage> langs = userLanguageService.lambdaQuery()
+				.eq(UserLanguage::getUserId, id)
+				.list();
+		// vo
+		UserVo userVo = UserVo.of(user, langs);
+
+		return userVo;
 	}
 
 	@Override
-	public User getUserById(Long id){
-		User user = this.getById(id);
-		if(user == null){
-			throw new BaseException(ExceptionEnum.USER_NOT_FOUND);
-		} else if(user.getStatus() == UserStatusConstant.ERROR){
-			throw new BaseException(ExceptionEnum.USER_STATUS_ERROR);
+	public UserVo getUserInfoWithExtra(Long id){
+		Long userId = BaseContext.getUserId();
+		// 是否关注
+		UserRelationship relationship = userRelationshipService.lambdaQuery()
+				.eq(UserRelationship::getFollowerId, userId)
+				.eq(UserRelationship::getFolloweeId, id)
+				.one();
+		UserRelationship relationship2 = userRelationshipService.lambdaQuery()
+				.eq(UserRelationship::getFollowerId, id)
+				.eq(UserRelationship::getFolloweeId, userId)
+				.one();
+
+		UserVo userVo = this.getUserInfo(id);
+
+		if (relationship2 != null && relationship2.getStatus().equals(UserRelationshipStatus.BLOCKED)) { // 对方屏蔽我
+			UserVo vo = new UserVo();
+			vo.setUsername(userVo.getUsername());
+			vo.setId(id);
+			vo.setRelationship(UserVo.RelationshipStatus.BLOCKED_BY_OTHER);
+			userVo = vo;
+		} else if (relationship != null && relationship.getStatus().equals(UserRelationshipStatus.BLOCKED)) { // 我屏蔽对方
+			userVo.setRelationship(UserVo.RelationshipStatus.BLOCKED_BY_ME);
+		} else if(relationship == null && relationship2 == null){
+			userVo.setRelationship(UserVo.RelationshipStatus.NO_RELATION);
+		} else if(relationship != null && relationship2 == null){
+			userVo.setRelationship(UserVo.RelationshipStatus.ONE_WAY_FOLLOW);
+		} else if(relationship == null){
+			userVo.setRelationship(UserVo.RelationshipStatus.ONE_WAY_FOLLOW_BY_OTHER);
+		} else {
+			userVo.setRelationship(UserVo.RelationshipStatus.MUTUAL_FOLLOW);
 		}
-		user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
-		I18NUtil.adjustCreateTimeTimezone(user);
-		I18NUtil.adjustUpdateTimeTimezone(user);
-		return user;
+
+		// 返回
+		return userVo;
 	}
 
 
@@ -298,14 +333,136 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	}
 
 	@Override
-	public List<User> getUserByIds(List<Long> ids) {
+	public List<UserVo> getUserByIds(List<Long> ids) {
+		if(ids == null || ids.isEmpty()){
+			return Collections.emptyList();
+		}
 		List<User> users = this.lambdaQuery()
 				.in(User::getId, ids)
 				.list();
-		users.forEach(user -> user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar())));
-		I18NUtil.adjustCreateTimeTimezone(users);
-		I18NUtil.adjustUpdateTimeTimezone(users);
-		return users;
+		Map<Long, List<UserLanguage>> userLangs = userLanguageService.lambdaQuery()
+				.in(UserLanguage::getUserId, ids)
+				.list()
+				.stream()
+				.collect(Collectors.groupingBy(UserLanguage::getUserId, Collectors.toList()));
+		return users.stream().map(user -> {
+			user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
+			return UserVo.of(user, userLangs.get(user.getId()));
+		}).toList();
+	}
+
+	@Override
+	public List<UserVo> getContacts(Long lastId) {
+		Long userId = BaseContext.getUserId();
+		List<UserRelationship> contacts = userRelationshipService.lambdaQuery()
+				.lt(lastId != null, UserRelationship::getFolloweeId, lastId)
+				.eq(UserRelationship::getFollowerId, userId)
+				.eq(UserRelationship::getStatus, UserRelationshipStatus.MUTUAL_FOLLOWING)
+				.last("limit 20")
+				.list();
+		if(contacts == null || contacts.isEmpty()){
+			return Collections.emptyList();
+		}
+		List<Long> contactIds = contacts.stream()
+				.map(UserRelationship::getFolloweeId)
+				.toList();
+		return this.getUserByIds(contactIds);
+	}
+
+	@Override
+	public boolean checkIsContact(long senderId, long receiverId) {
+		Long count = userRelationshipService.lambdaQuery()
+				.eq(UserRelationship::getFollowerId, senderId)
+				.eq(UserRelationship::getFolloweeId, receiverId)
+				.count();
+		return count > 0;
+	}
+
+	//TODO 注意边界检查
+	@Override
+	@Transactional
+	public FollowVo follow(UserFollowDto dto) {
+		Long userId = BaseContext.getUserId();
+		Long followeeId = dto.getFolloweeId();
+		FollowVo followVo = new FollowVo();
+		Boolean follow = dto.getFollow();  // 获取 follow 参数来判断是关注还是取消关注
+		if (followeeId == null){
+			throw new BaseException();
+		}
+
+		UserRelationship relationshipFollower = userRelationshipService.lambdaQuery()
+				.eq(UserRelationship::getFollowerId, userId)
+				.eq(UserRelationship::getFolloweeId, followeeId)
+				.one();
+		UserRelationship relationshipFollowee = userRelationshipService.lambdaQuery()
+				.eq(UserRelationship::getFollowerId, followeeId)
+				.eq(UserRelationship::getFolloweeId, userId)
+				.one();
+
+		if (relationshipFollower != null && relationshipFollower.getStatus().equals(UserRelationshipStatus.BLOCKED)) {
+			throw new BaseException(ExceptionEnum.USER_CANNOT_FOLLOW_WHEN_YOU_BLOCKED_SOMEONE);
+		} else if (relationshipFollowee != null && relationshipFollowee.getStatus().equals(UserRelationshipStatus.BLOCKED)) {
+			throw new BaseException(ExceptionEnum.USER_YOU_ARE_BLOCKED);
+		}
+
+		// 如果是关注操作
+		if (Boolean.TRUE.equals(follow)) {
+			// 当前用户没关注对方，现在关注
+			if (relationshipFollower == null) {
+				relationshipFollower = new UserRelationship();
+				relationshipFollower.setFollowerId(userId);
+				relationshipFollower.setFolloweeId(followeeId);
+				if (relationshipFollowee != null) {
+					relationshipFollower.setStatus(UserRelationshipStatus.MUTUAL_FOLLOWING);
+					relationshipFollowee.setStatus(UserRelationshipStatus.MUTUAL_FOLLOWING);
+					userRelationshipService.updateById(relationshipFollowee);
+				} else {
+					relationshipFollower.setStatus(UserRelationshipStatus.FOLLOWING);
+				}
+				userRelationshipService.save(relationshipFollower);
+				this.lambdaUpdate()
+						.eq(User::getId, userId)
+						.setIncrBy(User::getFollowing, 1)
+						.update();
+				this.lambdaUpdate()
+						.eq(User::getId, followeeId)
+						.setIncrBy(User::getFollowers, 1)
+						.update();
+			}
+			if (relationshipFollowee != null) {
+				followVo.setRelationship(UserVo.RelationshipStatus.MUTUAL_FOLLOW);
+			} else {
+				followVo.setRelationship(UserVo.RelationshipStatus.ONE_WAY_FOLLOW);
+			}
+		} else { // 如果是取消关注操作
+			// 当前用户已经关注对方，现在取消关注
+			if (relationshipFollower != null) {
+				userRelationshipService.removeById(relationshipFollower.getId());
+				// 取消关注后，需要检查对方的状态
+				if (relationshipFollowee != null) {
+					relationshipFollowee.setStatus(UserRelationshipStatus.FOLLOWING);
+					userRelationshipService.updateById(relationshipFollowee);
+				}
+				this.lambdaUpdate()
+						.eq(User::getId, userId)
+						.setIncrBy(User::getFollowing, -1)
+						.update();
+				this.lambdaUpdate()
+						.eq(User::getId, followeeId)
+						.setIncrBy(User::getFollowers, -1)
+						.update();
+			}
+			if (relationshipFollowee != null) {
+				followVo.setRelationship(UserVo.RelationshipStatus.ONE_WAY_FOLLOW_BY_OTHER);
+			} else {
+				followVo.setRelationship(UserVo.RelationshipStatus.NO_RELATION);
+			}
+		}
+
+		User user = this.getById(followeeId);
+		followVo.setFollowers(user.getFollowers());
+		followVo.setFollowing(user.getFollowing());
+		return followVo;
 	}
 
 	//------------------- OAuth2 -------------------

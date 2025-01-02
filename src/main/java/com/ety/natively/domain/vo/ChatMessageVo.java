@@ -51,7 +51,7 @@ public class ChatMessageVo implements Serializable {
 	private Long receiverId;
 
 	/**
-	 * 消息类型（1，文本；2，图片；3，其他）
+	 * 消息类型（1，文本；2，图片；3，Voice；4，其他）
 	 */
 	private Integer type;
 

@@ -27,7 +27,6 @@ public class ExceptionsHandler {
 	}
 
 	@ExceptionHandler(BaseException.class)
-	@MessageExceptionHandler(BaseException.class)
 	public R<Void> handleCustomException(BaseException e){
 		log.debug("自定义异常：通用：", e);
 		ExceptionEnum exceptionEnum = e.getExceptionEnum();
@@ -35,13 +34,14 @@ public class ExceptionsHandler {
 		if(response != null) {
 			response.setStatus(exceptionEnum.getHttpCode());
 		}
-		return R.error(exceptionEnum.getErrorCode(), t.get("ex." + exceptionEnum.getErrorMsgKey()));
+		return R.error(exceptionEnum.getErrorCode(), t.get("ex." + exceptionEnum.getErrorMsgKey(), e.getExceptionArgs()));
 	}
 
 	@ExceptionHandler(Exception.class)
-	@MessageExceptionHandler(Exception.class)
 	public R<Void> handleOtherException(Exception e){
 		log.error("其他异常：", e);
 		return R.error(t.get("ex.unknown"));
 	}
+
+
 }

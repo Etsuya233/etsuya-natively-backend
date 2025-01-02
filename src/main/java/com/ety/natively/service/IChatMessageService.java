@@ -5,6 +5,7 @@ import com.ety.natively.domain.po.ChatMessage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ety.natively.domain.vo.ChatMessageVo;
 import com.ety.natively.domain.vo.ConversationVo;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.util.List;
@@ -26,4 +27,6 @@ public interface IChatMessageService extends IService<ChatMessage> {
 	List<ConversationVo> getConversationList(String lastId);
 
 	List<ChatMessageVo> loadMoreOldMessage(Long userId, String lastId);
+
+	void sendFile(MultipartFile file, Integer type, Long receiverId);
 }

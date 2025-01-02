@@ -13,7 +13,7 @@ public class TranslationUtil {
 		source = messageSource;
 	}
 
-	public String get(String key, Locale locale, String... args){
+	public String get(String key, Locale locale, Object... args){
 		try {
 			return source.getMessage(key, args, locale);
 		} catch (NoSuchMessageException e) {
@@ -21,7 +21,7 @@ public class TranslationUtil {
 		}
 	}
 
-	public String get(String key, String... args){
+	public String get(String key, Object... args){
 		return get(key, BaseContext.getLanguage(), args);
 	}
 

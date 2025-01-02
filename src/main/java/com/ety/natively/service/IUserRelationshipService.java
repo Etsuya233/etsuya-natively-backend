@@ -1,6 +1,6 @@
 package com.ety.natively.service;
 
-import com.ety.natively.domain.po.Contact;
+import com.ety.natively.domain.po.UserRelationship;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
@@ -9,8 +9,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * </p>
  *
  * @author Etsuya
- * @since 2024-12-04
+ * @since 2025-01-01
  */
-public interface IContactService extends IService<Contact> {
+public interface IUserRelationshipService extends IService<UserRelationship> {
 
 }

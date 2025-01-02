@@ -110,9 +110,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		List<Long> userIds = posts.stream()
 				.map(Post::getUserId)
 				.toList();
-		Map<Long, User> userMap = userService.getUserByIds(userIds)
+		Map<Long, UserVo> userMap = userService.getUserByIds(userIds)
 				.stream()
-				.collect(Collectors.toMap(User::getId, Function.identity()));
+				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
 		I18NUtil.adjustCreateTimeTimezone(posts);
 		Long userId = BaseContext.getUserId();
 		Map<Long, Vote> voteMap = (userId != null)?
@@ -137,9 +137,11 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 
 			//user info
 			if(userMap.containsKey(post.getUserId())){
+				UserVo user = userMap.get(post.getUserId());
 				dto.setUserId(post.getUserId());
-				dto.setNickname(userMap.get(post.getUserId()).getNickname());
-				dto.setAvatar(userMap.get(post.getUserId()).getAvatar());
+				dto.setNickname(user.getNickname());
+				dto.setAvatar(user.getAvatar());
+				dto.setUserLanguages(user.getLanguages());
 			} else {
 				dto.setUserId(null);
 			}
@@ -189,7 +191,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 
 		//basic info
 		Long userId = post.getUserId();
-		User user = userService.getUserInfo(userId);
+		UserVo user = userService.getUserInfo(userId);
 		PostSummary summary = postSummaryService.getById(post.getId());
 		PostVo postVo = new PostVo();
 		postVo.setId(post.getId());
@@ -198,6 +200,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		postVo.setType(post.getType());
 		postVo.setUserId(userId);
 		postVo.setNickname(user.getNickname());
+		postVo.setUserLanguages(user.getLanguages());
 		postVo.setAvatar(user.getAvatar());
 		postVo.setUpvote(summary.getUpvoteCount());
 		postVo.setDownvote(summary.getDownvoteCount());
@@ -294,8 +297,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		List<Long> userIds = comments.stream()
 				.map(Comment::getUserId)
 				.toList();
-		Map<Long, User> userMap = userService.getUserByIds(userIds).stream()
-				.collect(Collectors.toMap(User::getId, Function.identity()));
+		Map<Long, UserVo> userMap = userService.getUserByIds(userIds).stream()
+				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
 		Map<Long, Vote> voteMap = (userId != null)?
 				voteService.lambdaQuery()
 						.in(Vote::getCommentId, ids)
@@ -330,9 +333,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 			//user info
 			commentVo.setUserId(comment.getUserId());
 			if(userMap.containsKey(comment.getUserId())){
-				User user = userMap.get(comment.getUserId());
+				UserVo user = userMap.get(comment.getUserId());
 				commentVo.setNickname(user.getNickname());
 				commentVo.setAvatar(user.getAvatar());
+				commentVo.setUserLanguages(user.getLanguages());
 			}
 
 			//bookmark
@@ -387,9 +391,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		commentSummaryService.save(summary);
 
 		CommentVo commentVo = BeanUtil.toBean(comment, CommentVo.class);
-		User user = userService.getUserById(userId);
+		UserVo user = userService.getUserInfo(userId);
 		commentVo.setAvatar(user.getAvatar());
 		commentVo.setNickname(user.getNickname());
+		commentVo.setUserLanguages(user.getLanguages());
 
 		postSummaryService.lambdaUpdate()
 				.eq(PostSummary::getPostId, comment.getPostId())
@@ -414,9 +419,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		commentSummaryService.save(summary);
 
 		CommentVo commentVo = BeanUtil.toBean(comment, CommentVo.class);
-		User user = userService.getUserById(userId);
+		UserVo user = userService.getUserInfo(userId);
 		commentVo.setAvatar(user.getAvatar());
 		commentVo.setNickname(user.getNickname());
+		commentVo.setUserLanguages(user.getLanguages());
 
 		postSummaryService.lambdaUpdate()
 				.eq(PostSummary::getPostId, comment.getPostId())
@@ -781,9 +787,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 						.map(Comment::getUserId)
 						.toList()
 		);
-		Map<Long, User> userMap = userService.getUserByIds(userIds)
+		Map<Long, UserVo> userMap = userService.getUserByIds(userIds)
 				.stream()
-				.collect(Collectors.toMap(User::getId, Function.identity()));
+				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
 
 		//ret
 		return bookmarks.stream().map(bookmark -> {
@@ -801,11 +807,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				vo.setContent(post.getContent().substring(0, length));
 				vo.setTitle(post.getTitle());
 				vo.setCreateTime(post.getCreateTime());
-				User user;
+				UserVo user;
 				if((user = userMap.get(post.getUserId())) != null){
 					vo.setUserId(post.getUserId());
 					vo.setAvatar(user.getAvatar());
 					vo.setNickname(user.getNickname());
+					vo.setUserLanguages(user.getLanguages());
 				}
 			} else {
 				Comment comment = commentMap.get(bookmark.getReferenceId());
@@ -818,11 +825,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				}
 				vo.setContent(comment.getContent().substring(0, length));
 				vo.setCreateTime(comment.getCreateTime());
-				User user;
+				UserVo user;
 				if((user = userMap.get(comment.getUserId())) != null){
 					vo.setUserId(comment.getUserId());
 					vo.setAvatar(user.getAvatar());
 					vo.setNickname(user.getNickname());
+					vo.setUserLanguages(user.getLanguages());
 				}
 			}
 			return vo;
