@@ -10,5 +10,4 @@ import org.springframework.web.bind.annotation.RestController;
 @Configuration
 @RequiredArgsConstructor
 public class TestController {
-
 }

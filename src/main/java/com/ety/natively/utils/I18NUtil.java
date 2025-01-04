@@ -15,6 +15,8 @@ import java.util.*;
 @Slf4j
 public class I18NUtil {
 
+	// -------- Basic ---------
+
 	/**
 	 * 系统自持的语言
 	 */
@@ -64,6 +66,7 @@ public class I18NUtil {
 		}
 	}
 
+	// -------- Time ---------
 
 	/**
 	 * 调整时区
@@ -140,37 +143,8 @@ public class I18NUtil {
 	 * @return 格式化后字符串
 	 */
 	public static String getRelativeTime(LocalDateTime dateTime) {
-		Locale locale = BaseContext.getLanguage();
-
-		// If the language is not supported, default to English
-		if (!isSupportedLocale(locale)) {
-			locale = Locale.ENGLISH;
-		}
-
-		// Get the current time
-		LocalDateTime now = LocalDateTime.now();
-
-		// Calculate the difference between the given time and the current time
-		Duration duration = Duration.between(dateTime, now);
-
-		// If the time is within the past hour, return minutes ago
-		if (duration.toMinutes() < 60) {
-			return getTimeString(duration.toMinutes(), "minute", locale);
-		}
-
-		// If the time is within the past 24 hours, return hours ago
-		if (duration.toDays() < 1) {
-			return getTimeString(duration.toHours(), "hour", locale);
-		}
-
-		// If the time is within the same week, return the day of the week
-		if (dateTime.isAfter(now.minusWeeks(1))) {
-			return getDayOfWeekString(dateTime, locale);
-		}
-
-		// Otherwise, return the full date (yyyy-MM-dd)
-		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-		return dateTime.format(formatter);
+		// TODO 没实现
+		return dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 	}
 
 	public static boolean isSupportedLocale(Locale locale) {
@@ -182,104 +156,7 @@ public class I18NUtil {
 		return false;
 	}
 
-	private static String getTimeString(long value, String unit, Locale locale) {
-		String timeUnit = unit;
-		String timeStr;
-
-		if (value == 1) {
-			timeUnit = unit.substring(0, unit.length() - 1); // Singular form
-		}
-
-		timeStr = switch (locale.getLanguage()) {
-			case "zh" -> value + " " + timeUnit + "前";
-			case "ja" -> value + " " + timeUnit + "前";
-			case "fr" -> value + " " + (unit.equals("minute") ? "minute" : "heure") + (value > 1 ? "s" : "") + " ago";
-			case "ko" -> value + " " + timeUnit + "전";
-			default -> // Default to English
-					value + " " + timeUnit + " ago";
-		};
-
-		return timeStr;
-	}
-
-	private static String getDayOfWeekString(LocalDateTime dateTime, Locale locale) {
-		DayOfWeek dayOfWeek = dateTime.getDayOfWeek();
-		String dayStr = switch (locale.getLanguage()) {
-			case "zh" -> getChineseDayOfWeek(dayOfWeek);
-			case "ja" -> getJapaneseDayOfWeek(dayOfWeek);
-			case "fr" -> getFrenchDayOfWeek(dayOfWeek);
-			case "ko" -> getKoreanDayOfWeek(dayOfWeek);
-			default -> getEnglishDayOfWeek(dayOfWeek);
-		};
-
-		return dayStr;
-	}
-
-	private static String getEnglishDayOfWeek(DayOfWeek dayOfWeek) {
-		return switch (dayOfWeek) {
-			case MONDAY -> "Monday";
-			case TUESDAY -> "Tuesday";
-			case WEDNESDAY -> "Wednesday";
-			case THURSDAY -> "Thursday";
-			case FRIDAY -> "Friday";
-			case SATURDAY -> "Saturday";
-			case SUNDAY -> "Sunday";
-			default -> "";
-		};
-	}
-
-	private static String getChineseDayOfWeek(DayOfWeek dayOfWeek) {
-		return switch (dayOfWeek) {
-			case MONDAY -> "星期一";
-			case TUESDAY -> "星期二";
-			case WEDNESDAY -> "星期三";
-			case THURSDAY -> "星期四";
-			case FRIDAY -> "星期五";
-			case SATURDAY -> "星期六";
-			case SUNDAY -> "星期天";
-			default -> "";
-		};
-	}
-
-	private static String getJapaneseDayOfWeek(DayOfWeek dayOfWeek) {
-		return switch (dayOfWeek) {
-			case MONDAY -> "月曜日";
-			case TUESDAY -> "火曜日";
-			case WEDNESDAY -> "水曜日";
-			case THURSDAY -> "木曜日";
-			case FRIDAY -> "金曜日";
-			case SATURDAY -> "土曜日";
-			case SUNDAY -> "日曜日";
-			default -> "";
-		};
-	}
-
-	private static String getFrenchDayOfWeek(DayOfWeek dayOfWeek) {
-		return switch (dayOfWeek) {
-			case MONDAY -> "Lundi";
-			case TUESDAY -> "Mardi";
-			case WEDNESDAY -> "Mercredi";
-			case THURSDAY -> "Jeudi";
-			case FRIDAY -> "Vendredi";
-			case SATURDAY -> "Samedi";
-			case SUNDAY -> "Dimanche";
-			default -> "";
-		};
-	}
-
-	private static String getKoreanDayOfWeek(DayOfWeek dayOfWeek) {
-		return switch (dayOfWeek) {
-			case MONDAY -> "월요일";
-			case TUESDAY -> "화요일";
-			case WEDNESDAY -> "수요일";
-			case THURSDAY -> "목요일";
-			case FRIDAY -> "금요일";
-			case SATURDAY -> "토요일";
-			case SUNDAY -> "일요일";
-			default -> "";
-		};
-	}
-
+	// -------- Language Detection ---------
 	private static final LanguageDetector detector = LanguageDetectorBuilder
 			.fromLanguages(com.github.pemistahl.lingua.api.Language.ENGLISH, com.github.pemistahl.lingua.api.Language.CHINESE, com.github.pemistahl.lingua.api.Language.FRENCH,
 					com.github.pemistahl.lingua.api.Language.JAPANESE, com.github.pemistahl.lingua.api.Language.KOREAN)
@@ -297,5 +174,7 @@ public class I18NUtil {
 		log.debug("Detect: {}: {}", language, content);
 		return ret;
 	}
+
+	// -------- Split ---------
 
 }
