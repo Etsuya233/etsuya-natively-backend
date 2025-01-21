@@ -52,7 +52,7 @@ public class Vote implements Serializable {
     /**
      * 1 点赞 -1 down vote
      */
-    private Integer type;
+    private Boolean type;
 
     /**
      * 创建时间UTC

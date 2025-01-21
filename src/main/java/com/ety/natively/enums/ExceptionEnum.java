@@ -16,16 +16,31 @@ public enum ExceptionEnum {
 	USER_LANGUAGE_FAILED(2007, 200, "user.languageFailed"),
 	USER_LANGUAGE_PROFICIENCY_FAILED(2008, 200, "user.languageProficiencyFailed"),
 	USER_LOCATION_FAILED(2009, 200, "ex.userLocationFailed"),
+	USER_CANNOT_FOLLOW_WHEN_YOU_BLOCKED_SOMEONE(2010, 200, "user.cannotFollowWhenYouBlockedSomeone"),
+	USER_YOU_ARE_BLOCKED(2011, 200, "user.youAreBlocked"),
 
-	POST_TITLE_EMPTY(3001, 200, "post.postTitleEmpty"),
-	POST_TITLE_RULE(3002, 200, "post.titleRule"),
+	POST_TITLE_CANNOT_BE_EMPTY(3001, 200, "post.postTitleEmpty"),
+	POST_TITLE_RULE(3002, 200, "post.postTitleRule"),
 	POST_NOT_EXIST(3003, 200, "post.notExist"),
 	POST_IMAGE_UPLOAD_ERROR(3004, 200, "post.imageUploadError"),
 	POST_VOICE_UPLOAD_ERROR(3005, 200, "post.voiceUploadError"),
-	USER_CANNOT_FOLLOW_WHEN_YOU_BLOCKED_SOMEONE(3006, 200, "user.cannotFollowWhenYouBlockedSomeone"),
-	USER_YOU_ARE_BLOCKED(3007, 200, "user.youAreBlocked"),
+	POST_VERIFICATION_FAILED(3006, 200, "post.verificationFailed"),
+	POST_BLOCK_OVER_LIMIT(3007, 200, "post.blockOverLimit"),
+	POST_CONTENT_OVER_LIMIT(3008, 200, "post.contentOverLimit"),
+	POST_IMAGE_OVER_LIMIT(3009, 200, "post.imageOverLimit"),
+	POST_VOICE_OVER_LIMIT(3010, 200, "post.voiceOverLimit"),
+	POST_TYPE_NOT_EXIST(3011, 200, "post.typeNotExist"),
+	POST_TITLE_TOO_LONG(3012, 200, "post.titleTooLong"),
+	POST_CANNOT_REPEAT_VOTE(3013, 200, "post.cannotRepeatVote"),
+	POST_PARSE_FAILED(3014, 200, "post.parseFailed"),
+	POST_COMMENT_LENGTH_LIMIT(3015, 200 , "post.commentLengthLimit" ),
+	POST_COMMENT_NOT_EXIST(3016, 200, "post.commentNotExist"),
+	POST_LANGUAGE_REQUIRED(3017, 200, "post.languageRequired"),
+	POST_UNSUPPORTED_LANGUAGE(3018, 200, "post.unsupportedLanguage"),
 
-	CHAT_NOT_CONTACT(4001, 200, "chat.notContact");
+	CHAT_NOT_CONTACT(4001, 200, "chat.notContact"),
+
+	NAVI_SERVER_ERROR(5001, 200, "navi.serverError");
 
 	final int errorCode;
 	final int httpCode;

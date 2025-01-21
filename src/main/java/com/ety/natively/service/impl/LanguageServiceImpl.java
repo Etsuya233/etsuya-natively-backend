@@ -1,8 +1,8 @@
 package com.ety.natively.service.impl;
 
 import com.ety.natively.constant.CommonType;
-import com.ety.natively.domain.ai.TranslationAiResult;
 import com.ety.natively.domain.dto.LookUpDto;
+import com.ety.natively.domain.navi.TranslationResponse;
 import com.ety.natively.domain.po.ChatMessage;
 import com.ety.natively.domain.po.Comment;
 import com.ety.natively.domain.po.Language;
@@ -111,10 +111,10 @@ public class LanguageServiceImpl implements LanguageService {
 		}
 		String displayLanguage = userLanguage.getDisplayLanguage(Locale.CHINESE);
 		Prompt prompt = TRANSLATION_PROMPT.create(Map.of("to", displayLanguage), TRANSLATION_OPTIONS);
-		TranslationAiResult result = chatClient.prompt(prompt)
+		TranslationResponse result = chatClient.prompt(prompt)
 				.user(originalText)
 				.call()
-				.entity(TranslationAiResult.class);
+				.entity(TranslationResponse.class);
 		if(result == null){
 			return TranslationVo.empty();
 		}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ety.natively.mapper.PostLanguageMapper">
+
+    <select id="selectPostLanguageCountByIds" resultType="com.ety.natively.domain.dto.PostLanguageCountDto"
+            parameterType="java.util.List">
+        select post_id, count(*) as count
+        from post_language
+        where post_id in
+        <foreach collection="ids" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+        group by post_id;
+    </select>
+</mapper>

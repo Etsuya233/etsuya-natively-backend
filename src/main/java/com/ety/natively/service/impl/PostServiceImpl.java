@@ -63,7 +63,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		//检查内容
 		if(dto.getType() == PostType.QUESTION){
 			if(StrUtil.isEmpty(dto.getTitle())){
-				throw new BaseException(ExceptionEnum.POST_TITLE_EMPTY);
+				throw new BaseException(ExceptionEnum.POST_TITLE_CANNOT_BE_EMPTY);
 			}
 		}
 		if(dto.getTitle().length() > 255){
@@ -155,7 +155,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 			//vote
 			Vote vote = voteMap.get(post.getId());
 			if(vote != null){
-				dto.setVote(vote.getType());
+				dto.setVote(vote.getType()? 1: -1);
 			};
 
 			//attachments
@@ -214,7 +214,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				.eq(Vote::getUserId, userId)
 				.one();
 		if(vote != null){
-			postVo.setVote(vote.getType());
+			postVo.setVote(vote.getType()? 1: -1);
 		}
 
 		//bookmark
@@ -353,7 +353,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 			//vote
 			Vote vote = voteMap.get(comment.getId());
 			if(vote != null){
-				commentVo.setVote(vote.getType());
+				commentVo.setVote(vote.getType()? 1: -1);
 			}
 
 			//attachment
@@ -505,7 +505,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		//检查内容
 		if(type == PostType.QUESTION){
 			if(StrUtil.isEmpty(title)){
-				throw new BaseException(ExceptionEnum.POST_TITLE_EMPTY);
+				throw new BaseException(ExceptionEnum.POST_TITLE_CANNOT_BE_EMPTY);
 			}
 		}
 		if(title != null && title.length() > 255){
@@ -594,7 +594,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 			} else {
 				vote.setCommentId(dto.getId());
 			}
-			vote.setType(dto.getType());
+			vote.setType(dto.getType() != -1);
 			vote.setUserId(userId);
 			voteService.save(vote);
 			if(dto.getPost()){
@@ -629,7 +629,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				return true;
 			}
 			//否则这里就是点了相反的
-			vote.setType(dto.getType());
+			vote.setType(dto.getType() != -1);
 			voteService.updateById(vote);
 			if(dto.getPost()){
 				postSummaryService.lambdaUpdate()
@@ -706,7 +706,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 			//vote
 			Vote vote = voteMap.get(post.getId());
 			if(vote != null){
-				dto.setVote(vote.getType());
+				dto.setVote(vote.getType()? 1: -1);
 			};
 
 			//attachments

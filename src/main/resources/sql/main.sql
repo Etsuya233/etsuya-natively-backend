@@ -143,6 +143,12 @@ create table post (
     update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间'
 );
 
+create table post_language (
+    post_id bigint not null ,
+    lang varchar(5) not null ,
+    primary key (post_id, lang)
+);
+
 create table comment (
     id bigint primary key not null comment '评论ID',
     user_id bigint not null comment '用户ID',

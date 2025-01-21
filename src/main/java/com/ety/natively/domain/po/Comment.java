@@ -7,6 +7,7 @@ import java.io.Serial;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
+import java.util.Comparator;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -59,6 +60,10 @@ public class Comment implements Serializable {
      */
     private String content;
 
+    private String image;
+    private String voice;
+    private String compare;
+
     /**
      * 创建时间UTC
      */
@@ -69,5 +74,6 @@ public class Comment implements Serializable {
      */
     private LocalDateTime updateTime;
 
+    public static Comparator<Comment> sortByIdAsc = Comparator.comparing(Comment::getId);
 
 }

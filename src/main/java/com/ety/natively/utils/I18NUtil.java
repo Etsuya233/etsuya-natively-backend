@@ -47,6 +47,15 @@ public class I18NUtil {
 		}
 	}
 
+	public static boolean isSupportedLanguage(String testLanguage) {
+		for (Locale language : languages) {
+			if(language.getLanguage().equals(testLanguage)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 
 	/**
 	 * 系统自持的地区 TODO 准备Deprecated

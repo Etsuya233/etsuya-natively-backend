@@ -21,4 +21,7 @@ public interface RedisConstant {
 	Long CHECK_IN_CONSECUTIVE_TTL = 2 * 24 + 1L;
 	Long USER_VERSION_TTL = 2 * 24 * 60 * 60L;
 	Long USER_OAUTH_TTL = 20 * 60L;
+
+	String POST_VERIFICATION_CODE_PREFIX = "post:verification:";
+	Long POST_VERIFICATION_CODE_TTL = 10 * 60L; // 10 min
 }

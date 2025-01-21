@@ -5,4 +5,5 @@ public interface MinioConstant {
 	String POST_IMAGES_BUCKET = "natively-post-images";
 	String POST_VOICES_BUCKET = "natively-post-voices";
 	String CHAT_ATTACHMENT_BUCKET = "natively-chat-attachment";
+	String POST_ATTACHMENT_BUCKET = "natively-post-attachment";
 }

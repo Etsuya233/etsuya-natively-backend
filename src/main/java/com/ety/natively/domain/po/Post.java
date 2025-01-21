@@ -7,6 +7,8 @@ import java.io.Serial;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
+import java.util.Comparator;
+
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -54,6 +56,12 @@ public class Post implements Serializable {
      */
     private Integer type;
 
+    private String previewText;
+    private String previewImage;
+    private String previewVoice;
+
+    private Boolean previewHasMore;
+
     /**
      * 创建时间UTC
      */
@@ -64,5 +72,6 @@ public class Post implements Serializable {
      */
     private LocalDateTime updateTime;
 
+    public static Comparator<Post> compareByIdDesc = (o1, o2) -> o2.getId().compareTo(o1.getId());
 
 }
