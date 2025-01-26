@@ -1,15 +1,23 @@
 package com.ety.natively.service.impl;
 
-import com.ety.natively.domain.navi.TranslationDto;
-import com.ety.natively.domain.navi.TranslationResponse;
-import com.ety.natively.domain.navi.TranslationVo;
+import cn.hutool.json.JSONUtil;
+import com.ety.natively.domain.dto.NaviSpeakDto;
+import com.ety.natively.domain.navi.*;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
+import com.ety.natively.properties.AzureProperties;
 import com.ety.natively.service.NaviServiceV2;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.I18NUtil;
+import com.microsoft.cognitiveservices.speech.SpeechConfig;
+import com.microsoft.cognitiveservices.speech.SpeechSynthesisOutputFormat;
+import com.microsoft.cognitiveservices.speech.SpeechSynthesisResult;
+import com.microsoft.cognitiveservices.speech.SpeechSynthesizer;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -17,17 +25,23 @@ import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
+import java.io.ByteArrayInputStream;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NaviServiceV2Impl implements NaviServiceV2 {
 
 	private final ChatClient chatClient;
+	private final AzureProperties azureProperties;
 
-	private final String TRANSLATION_AUTO_DETECTION_SYSTEM_MESSAGE = """
+	private final String TRANSLATION_MANUAL_SYSTEM_MESSAGE = """
 			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
 			你能够像母语者一样讲世界上的各种语言。现在你需要将给出的 {original} 原文翻译为 {language}。
 		  	规则：
@@ -39,7 +53,7 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		   	
 		   	{format}
 			""";
-	private final String TRANSLATION_MANUAL_SYSTEM_MESSAGE = """
+	private final String TRANSLATION_AUTO_DETECTION_SYSTEM_MESSAGE = """
 			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
 			你能够像母语者一样讲世界上的各种语言。现在你需要将给出的原文翻译为 {language}。
 		  	规则：
@@ -61,8 +75,8 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 	private final SystemPromptTemplate TRANSLATION_SYSTEM_AUTO_DETECTION_PROMPT_TEMPLATE = new SystemPromptTemplate(TRANSLATION_AUTO_DETECTION_SYSTEM_MESSAGE);
 	private final SystemPromptTemplate TRANSLATION_SYSTEM_MANUAL_PROMPT_TEMPLATE = new SystemPromptTemplate(TRANSLATION_MANUAL_SYSTEM_MESSAGE);
 	private final ChatOptions TRANSLATION_OPTIONS = OpenAiChatOptions.builder()
-			.withTemperature(1.3)
-			.withResponseFormat(ResponseFormat.builder().type(ResponseFormat.Type.JSON_OBJECT).build())
+			.temperature(1.3)
+			.responseFormat(ResponseFormat.builder().type(ResponseFormat.Type.JSON_OBJECT).build())
 			.build();
 
 	@Override
@@ -86,7 +100,7 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 					TRANSLATION_OPTIONS);
 		} else {
 			prompt = TRANSLATION_SYSTEM_MANUAL_PROMPT_TEMPLATE.create(
-					Map.of("language", targetLanguage, "format", TRANSLATION_MANUAL_JSON_OBJECT),
+					Map.of("language", targetLanguage, "format", TRANSLATION_MANUAL_JSON_OBJECT, "original", originalLanguage),
 					TRANSLATION_OPTIONS);
 		}
 		TranslationResponse response = chatClient.prompt(prompt)
@@ -101,8 +115,140 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 
 		TranslationVo vo = new TranslationVo();
 		vo.setOriginalLanguage(response.getTranslateFrom());
-		vo.setTargetLanguage(dto.getTargetLanguage());
-		vo.setTranslation(vo.getTranslation());
+		vo.setTranslation(response.getFinalTranslation());
 		return vo;
+	}
+
+	// Navi Preset
+	private final String ASK_SYSTEM_MESSAGE = """
+			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
+			你能够以母语水平与人交流。当前有人向你请教一个语言相关的问题。
+		    问题由两个部分组成：一个“引用”（quote，用户引用的外语句子或短语）和一个“提问”（question，用户使用母语围绕着引用向你提问）。
+		    回答请围绕着引用作答，如果引用不存在，就只需关注提问。
+		    请以**提问的语言**而不是引用的语言作答，确保内容准确、清晰、完整、易于理解。如有需要请适当扩充以及举例子。
+
+		    输入为一个 JSON 对象，包含以下两个字段：
+		    question：具体的提问内容（字符串）。
+		    quote：问题的引用部分（字符串）。
+		    
+		    请根据输入提供答案。
+			""";
+	private final SystemPromptTemplate ASK_SYSTEM_PROMPT_TEMPLATE = new SystemPromptTemplate(ASK_SYSTEM_MESSAGE);
+	private final ChatOptions ASK_OPTIONS = OpenAiChatOptions.builder()
+			.temperature(1.3)
+			.build();
+
+	@Override
+	public AskVo ask(AskDto dto) {
+		String question = dto.getQuestion();
+		String quote = dto.getQuote();
+		if(!StringUtils.hasText(question)){
+			return new AskVo("");
+		}
+		if(quote == null){
+			quote = "";
+		}
+
+		String userContent = JSONUtil.toJsonStr(Map.of("question", question, "quote", quote));
+		Prompt prompt = ASK_SYSTEM_PROMPT_TEMPLATE.create(ASK_OPTIONS);
+		String answer = chatClient.prompt(prompt)
+				.user(userContent)
+				.call()
+				.content();
+
+		return new AskVo(answer);
+	}
+
+	private final String EXPLANATION_SYSTEM_LANGUAGE = """
+			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
+			你现在面对的是一个学习某门外语的学生，该学生可能看不太懂这段话。现在请你用 {language} 解释我给出的内容。主要聚焦于语言学习上。
+		   	规则：
+		   	1，你需要带着他分析这段话，并解释在分析过程中碰到的在语言层面上的重难点。如果文本太长（超过150个单词），你只需要分析较为重要的地方。
+		   	2，内容完整，清晰，简介。不需要过多的寒暄语。
+		   	3，不要使用代码块。
+		   	你需要返回Markdown格式的内容。不要返回代码块。
+			""";
+	private final SystemPromptTemplate EXPLANATION_SYSTEM_PROMPT_TEMPLATE = new SystemPromptTemplate(EXPLANATION_SYSTEM_LANGUAGE);
+	private final ChatOptions EXPLANATION_OPTIONS = OpenAiChatOptions.builder()
+			.temperature(1.0)
+			.build();
+
+	@Override
+	public ExplainVo explain(ExplainDto dto) {
+		String quote = dto.getQuote();
+		if(!StringUtils.hasText(quote)){
+			return new ExplainVo("");
+		}
+
+		Locale language = BaseContext.getLanguage();
+		String languageName = language.getDisplayLanguage(Locale.CHINESE);
+		Prompt prompt = EXPLANATION_SYSTEM_PROMPT_TEMPLATE.create(Map.of("language", languageName), EXPLANATION_OPTIONS);
+
+		String answer = chatClient.prompt(prompt)
+				.user(quote)
+				.call()
+				.content();
+
+		return new ExplainVo(answer);
+	}
+
+	private String getModelByLanguageDetection(String content){
+		Locale language = I18NUtil.getContentLanguage(content);
+		if(language.equals(Locale.CHINESE)){
+			return "zh-CN-YunyiMultilingualNeural";
+		} else if(language.equals(Locale.JAPAN)){
+			return "ja-JP-MasaruMultilingualNeural";
+		} else if(language.equals(Locale.FRENCH)){
+			return "fr-FR-LucienMultilingualNeural";
+		} else if(language.equals(Locale.KOREAN)){
+			return "ko-KR-HyunsuMultilingualNeural";
+		} else {
+			return "en-US-AlloyTurboMultilingualNeural";
+		}
+	}
+
+	@Override
+	public CompletableFuture<Void> pronounce(PronounceDto dto, HttpServletResponse response) {
+		return CompletableFuture.runAsync(() -> {
+			String content = dto.getContent();
+
+			SpeechConfig speechConfig = SpeechConfig.fromSubscription(azureProperties.getKey(), azureProperties.getRegion());
+			speechConfig.setSpeechSynthesisVoiceName(this.getModelByLanguageDetection(content));
+			speechConfig.setSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3);
+
+			response.setContentType("audio/ogg");
+			response.setHeader("Transfer-Encoding", "chunked");
+			response.setStatus(HttpServletResponse.SC_OK);
+
+			SpeechSynthesizer synthesizer = new SpeechSynthesizer(speechConfig, null);
+
+			synthesizer.SynthesisStarted.addEventListener((o, e) -> {
+				log.debug("Synthesizer started");
+			});
+			synthesizer.SynthesisCompleted.addEventListener((o, e) -> {
+				log.debug("Synthesizer completed");
+			});
+
+			Future<SpeechSynthesisResult> future = synthesizer.SpeakTextAsync(content);
+
+			try {
+				ServletOutputStream os = response.getOutputStream();
+				SpeechSynthesisResult result = future.get();
+				long len;
+				byte[] buffer = new byte[1024];
+				ByteArrayInputStream stream = new ByteArrayInputStream(result.getAudioData());
+				while((len = stream.read(buffer)) != -1) {
+					os.write(buffer, 0, (int) len);
+					os.flush();
+				}
+				os.close();
+				log.debug("Transfer completed");
+			} catch (Exception e) {
+				log.error("Transfer failed", e);
+			} finally {
+				synthesizer.close();
+				speechConfig.close();
+			}
+		});
 	}
 }

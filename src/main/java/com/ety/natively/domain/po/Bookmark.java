@@ -7,11 +7,8 @@ import java.io.Serial;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
-
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 /**
@@ -20,49 +17,49 @@ import lombok.experimental.Accessors;
  * </p>
  *
  * @author Etsuya
- * @since 2024-12-02
+ * @since 2025-01-22
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
 @TableName("bookmark")
-@NoArgsConstructor
-@AllArgsConstructor
 public class Bookmark implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     /**
-     * 书签ID
+     * Bookmark ID
      */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
+    private Long userId;
+
     /**
-     * 对应收藏内容的ID
+     * 收藏内容ID（可选）
      */
     private Long referenceId;
 
     /**
-     * 用户ID
+     * 收藏内容（可选）
      */
-    private Long userId;
+    private String content;
 
     /**
-     * 1，贴子 2，评论
+     * 类型：0 文本 1 帖子 2 评论
      */
     private Integer type;
+
+    /**
+     * 收藏备注
+     */
+    private String note;
 
     /**
      * 创建时间UTC
      */
     private LocalDateTime createTime;
-
-    /**
-     * 更新时间
-     */
-    private LocalDateTime updateTime;
 
 
 }

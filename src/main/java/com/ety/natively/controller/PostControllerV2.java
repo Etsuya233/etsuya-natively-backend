@@ -1,9 +1,7 @@
 package com.ety.natively.controller;
 
 import com.ety.natively.domain.R;
-import com.ety.natively.domain.dto.CommentCreationDto;
-import com.ety.natively.domain.dto.PostCreationDto;
-import com.ety.natively.domain.dto.VoteDto;
+import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.vo.*;
 import com.ety.natively.service.IPostServiceV2;
 import lombok.RequiredArgsConstructor;
@@ -58,13 +56,13 @@ public class PostControllerV2 {
 
 	@PostMapping("/comment")
 	public R<Long> createComment(
-			@RequestParam("postId") Long postId,
+//			@RequestParam(value = "postId", required = false) Long postId,
 			@RequestParam(value = "parentId", required = false) Long parentId,
 			@RequestParam("content") String content,
 			@RequestParam(value = "image", required = false) MultipartFile image,
 			@RequestParam(value = "voice", required = false) MultipartFile voice,
 			@RequestParam(value = "compare", required = false) String compare){
-		Long commentId = postService.createComment(postId, parentId, content, image, voice, compare);
+		Long commentId = postService.createComment(parentId, content, image, voice, compare);
 		return R.ok(commentId);
 	}
 
@@ -81,4 +79,36 @@ public class PostControllerV2 {
 		CommentVoV2 ret = postService.getCommentById(id);
 		return R.ok(ret);
 	}
+
+	@PostMapping("/bookmark")
+	public R<Void> createBookmark(@RequestBody BookmarkCreateDto dto){
+		postService.createBookmark(dto);
+		return R.ok();
+	}
+
+	@GetMapping("/bookmark")
+	public R<List<BookmarkVo>> getBookmark(@RequestParam(required = false) Long lastId){
+		List<BookmarkVo> ret = postService.getBookmark(lastId);
+		return R.ok(ret);
+	}
+
+	@PutMapping("/bookmark")
+	public R<Void> updateBookmark(@RequestBody BookmarkUpdateDto dto){
+		postService.updateBookmark(dto);
+		return R.ok();
+	}
+
+	@DeleteMapping("/bookmark/{id}")
+	public R<Void> deleteBookmark(@PathVariable Long id){
+		postService.deleteBookmark(id);
+		return R.ok();
+	}
+
+	@GetMapping("/user")
+	public R<List<PostPreview>> getUserPosts(@RequestParam(required = true) Long userId,
+											 @RequestParam(required = false) Long lastId){
+		List<PostPreview> ret = postService.getUserPost(userId, lastId);
+		return R.ok(ret);
+	}
+
 }

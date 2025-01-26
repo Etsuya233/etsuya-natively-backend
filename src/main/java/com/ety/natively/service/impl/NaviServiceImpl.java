@@ -43,6 +43,7 @@ import java.util.concurrent.FutureTask;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Deprecated
 public class NaviServiceImpl implements NaviService {
 
 	private final ChatClient chatClient;
@@ -165,7 +166,7 @@ public class NaviServiceImpl implements NaviService {
 			""";
 	private final SystemPromptTemplate CUSTOM_SYSTEM_PROMPT_TEMPLATE = new SystemPromptTemplate(CUSTOM_SYSTEM_MESSAGE);
 	private final ChatOptions CUSTOM_OPTIONS = OpenAiChatOptions.builder()
-			.withTemperature(1.3)
+			.temperature(1.3)
 			.build();
 	private final String TRANSLATION_SYSTEM_MESSAGE = """
 			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
@@ -208,8 +209,8 @@ public class NaviServiceImpl implements NaviService {
 			""";
 	private final SystemPromptTemplate TRANSLATION_SYSTEM_PROMPT_TEMPLATE = new SystemPromptTemplate(TRANSLATION_SYSTEM_MESSAGE);
 	private final ChatOptions TRANSLATION_OPTIONS = OpenAiChatOptions.builder()
-			.withTemperature(1.3)
-			.withResponseFormat(ResponseFormat.builder().type(ResponseFormat.Type.JSON_OBJECT).build())
+			.temperature(1.3)
+			.responseFormat(ResponseFormat.builder().type(ResponseFormat.Type.JSON_OBJECT).build())
 			.build();
 	private final String EXPLANATION_SYSTEM_LANGUAGE = """
 			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
@@ -222,6 +223,6 @@ public class NaviServiceImpl implements NaviService {
 			""";
 	private final SystemPromptTemplate EXPLANATION_SYSTEM_PROMPT_TEMPLATE = new SystemPromptTemplate(EXPLANATION_SYSTEM_LANGUAGE);
 	private final ChatOptions EXPLANATION_OPTIONS = OpenAiChatOptions.builder()
-			.withTemperature(1.0)
+			.temperature(1.0)
 			.build();
 }

@@ -54,7 +54,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 	private final MinioClient minioClient;
 	private final IAttachmentService attachmentService;
 	private final MinioUtils minioUtils;
-	private final IBookmarkService bookmarkService;
+//	private final IBookmarkService bookmarkService;
 
 	@Override
 	public Long createPost(PostDto dto) {
@@ -217,15 +217,15 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 			postVo.setVote(vote.getType()? 1: -1);
 		}
 
-		//bookmark
-		Long count = bookmarkService.lambdaQuery()
-				.eq(Bookmark::getUserId, userId)
-				.eq(Bookmark::getReferenceId, id)
-				.eq(Bookmark::getType, BookmarkType.POST)
-				.count();
-		if(count > 0){
-			postVo.setBookmarked(1);
-		}
+//		//bookmark
+//		Long count = bookmarkService.lambdaQuery()
+//				.eq(Bookmark::getUserId, userId)
+//				.eq(Bookmark::getReferenceId, id)
+//				.eq(Bookmark::getType, BookmarkType.POST)
+//				.count();
+//		if(count > 0){
+//			postVo.setBookmarked(1);
+//		}
 
 		//attachment
 		List<Attachment> attachments = attachmentService.lambdaQuery()
@@ -266,15 +266,15 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		List<Long> ids = new ArrayList<>(comments.stream()
 				.map(Comment::getId)
 				.toList());
-		Set<Long> bookmarked = bookmarkService.lambdaQuery()
-				.in(Bookmark::getReferenceId, ids)
-				.eq(Bookmark::getType, BookmarkType.COMMENT)
-				.eq(userId != null, Bookmark::getUserId, userId)
-				.select(Bookmark::getReferenceId)
-				.list()
-				.stream()
-				.map(Bookmark::getReferenceId)
-				.collect(Collectors.toSet());
+//		Set<Long> bookmarked = bookmarkService.lambdaQuery()
+//				.in(Bookmark::getReferenceId, ids)
+//				.eq(Bookmark::getType, BookmarkType.COMMENT)
+//				.eq(userId != null, Bookmark::getUserId, userId)
+//				.select(Bookmark::getReferenceId)
+//				.list()
+//				.stream()
+//				.map(Bookmark::getReferenceId)
+//				.collect(Collectors.toSet());
 		Map<Long, CommentSummary> summaryMap = commentSummaryService.lambdaQuery()
 				.in(CommentSummary::getCommentId, ids)
 				.list()
@@ -339,10 +339,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 				commentVo.setUserLanguages(user.getLanguages());
 			}
 
-			//bookmark
-			if(bookmarked.contains(comment.getId())){
-				commentVo.setBookmarked(1);
-			}
+//			//bookmark
+//			if(bookmarked.contains(comment.getId())){
+//				commentVo.setBookmarked(1);
+//			}
 
 			//summary
 			CommentSummary summary = summaryMap.get(comment.getId());
@@ -733,120 +733,120 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements IP
 		}).toList();
 	}
 
-	@Override
-	public Boolean bookmark(BookmarkNewDto dto) {
-		Long userId = BaseContext.getUserId();
-		Long referenceId = dto.getId();
-		Integer type = dto.getType();
-
-		return bookmarkService.save(new Bookmark(null, referenceId, userId, type, null, null));
-	}
-
-	@Override
-	public List<BookmarkVo> getBookmarks(Long lastId) {
-		Long userId = BaseContext.getUserId();
-		List<Bookmark> bookmarks = bookmarkService.lambdaQuery()
-				.eq(Bookmark::getUserId, userId)
-				.orderByDesc(Bookmark::getId)
-				.lt(lastId != null, Bookmark::getId, lastId)
-				.last("limit 10")
-				.list();
-
-		//posts
-		List<Long> postIds = bookmarks.stream()
-				.filter(b -> b.getType().equals(BookmarkType.POST))
-				.map(Bookmark::getReferenceId)
-				.toList();
-		Map<Long, Post> postMap = postIds.isEmpty()? Map.of():
-				this.lambdaQuery()
-						.in(Post::getId, postIds)
-						.list()
-						.stream().collect(Collectors.toMap(Post::getId, Function.identity()));
-
-		//comments
-		List<Long> bookmarkIds = bookmarks.stream()
-				.filter(b -> b.getType().equals(BookmarkType.COMMENT))
-				.map(Bookmark::getReferenceId)
-				.toList();
-		Map<Long, Comment> commentMap = bookmarkIds.isEmpty()? Map.of():
-				commentService.lambdaQuery()
-						.in(Comment::getId, bookmarkIds)
-						.list()
-						.stream().collect(Collectors.toMap(Comment::getId, Function.identity()));
-
-		//user
-		List<Long> userIds = new ArrayList<>(
-				postMap.values()
-						.stream()
-						.map(Post::getUserId)
-						.toList()
-		);
-		userIds.addAll(
-				commentMap.values()
-						.stream()
-						.map(Comment::getUserId)
-						.toList()
-		);
-		Map<Long, UserVo> userMap = userService.getUserByIds(userIds)
-				.stream()
-				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
-
-		//ret
-		return bookmarks.stream().map(bookmark -> {
-			BookmarkVo vo = new BookmarkVo();
-			vo.setType(bookmark.getType());
-			if(bookmark.getType().equals(BookmarkType.POST)){
-				Post post = postMap.get(bookmark.getReferenceId());
-				vo.setReferenceId(post.getId());
-				vo.setId(bookmark.getId());
-				int length = post.getContent().length();
-				if(length > 200){
-					vo.setContentHasMore(true);
-					length = 200;
-				}
-				vo.setContent(post.getContent().substring(0, length));
-				vo.setTitle(post.getTitle());
-				vo.setCreateTime(post.getCreateTime());
-				UserVo user;
-				if((user = userMap.get(post.getUserId())) != null){
-					vo.setUserId(post.getUserId());
-					vo.setAvatar(user.getAvatar());
-					vo.setNickname(user.getNickname());
-					vo.setUserLanguages(user.getLanguages());
-				}
-			} else {
-				Comment comment = commentMap.get(bookmark.getReferenceId());
-				vo.setReferenceId(comment.getId());
-				vo.setId(comment.getId());
-				int length = comment.getContent().length();
-				if(length > 200){
-					vo.setContentHasMore(true);
-					length = 200;
-				}
-				vo.setContent(comment.getContent().substring(0, length));
-				vo.setCreateTime(comment.getCreateTime());
-				UserVo user;
-				if((user = userMap.get(comment.getUserId())) != null){
-					vo.setUserId(comment.getUserId());
-					vo.setAvatar(user.getAvatar());
-					vo.setNickname(user.getNickname());
-					vo.setUserLanguages(user.getLanguages());
-				}
-			}
-			return vo;
-		}).filter(vo -> vo.getUserId() != null).toList();
-	}
-
-	@Override
-	public Boolean removeBookmark(BookmarkNewDto dto) {
-		Long userId = BaseContext.getUserId();
-		return bookmarkService.remove(
-				new LambdaQueryWrapper<Bookmark>()
-						.eq(Bookmark::getUserId, userId)
-						.eq(Bookmark::getReferenceId, dto.getId())
-						.eq(Bookmark::getType, dto.getType())
-		);
-	}
+//	@Override
+//	public Boolean bookmark(BookmarkNewDto dto) {
+//		Long userId = BaseContext.getUserId();
+//		Long referenceId = dto.getId();
+//		Integer type = dto.getType();
+//
+//		return bookmarkService.save(new Bookmark(null, referenceId, userId, type, null, null));
+//	}
+//
+//	@Override
+//	public List<BookmarkVo> getBookmarks(Long lastId) {
+//		Long userId = BaseContext.getUserId();
+//		List<Bookmark> bookmarks = bookmarkService.lambdaQuery()
+//				.eq(Bookmark::getUserId, userId)
+//				.orderByDesc(Bookmark::getId)
+//				.lt(lastId != null, Bookmark::getId, lastId)
+//				.last("limit 10")
+//				.list();
+//
+//		//posts
+//		List<Long> postIds = bookmarks.stream()
+//				.filter(b -> b.getType().equals(BookmarkType.POST))
+//				.map(Bookmark::getReferenceId)
+//				.toList();
+//		Map<Long, Post> postMap = postIds.isEmpty()? Map.of():
+//				this.lambdaQuery()
+//						.in(Post::getId, postIds)
+//						.list()
+//						.stream().collect(Collectors.toMap(Post::getId, Function.identity()));
+//
+//		//comments
+//		List<Long> bookmarkIds = bookmarks.stream()
+//				.filter(b -> b.getType().equals(BookmarkType.COMMENT))
+//				.map(Bookmark::getReferenceId)
+//				.toList();
+//		Map<Long, Comment> commentMap = bookmarkIds.isEmpty()? Map.of():
+//				commentService.lambdaQuery()
+//						.in(Comment::getId, bookmarkIds)
+//						.list()
+//						.stream().collect(Collectors.toMap(Comment::getId, Function.identity()));
+//
+//		//user
+//		List<Long> userIds = new ArrayList<>(
+//				postMap.values()
+//						.stream()
+//						.map(Post::getUserId)
+//						.toList()
+//		);
+//		userIds.addAll(
+//				commentMap.values()
+//						.stream()
+//						.map(Comment::getUserId)
+//						.toList()
+//		);
+//		Map<Long, UserVo> userMap = userService.getUserByIds(userIds)
+//				.stream()
+//				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
+//
+//		//ret
+//		return bookmarks.stream().map(bookmark -> {
+//			BookmarkVo vo = new BookmarkVo();
+//			vo.setType(bookmark.getType());
+//			if(bookmark.getType().equals(BookmarkType.POST)){
+//				Post post = postMap.get(bookmark.getReferenceId());
+//				vo.setReferenceId(post.getId());
+//				vo.setId(bookmark.getId());
+//				int length = post.getContent().length();
+//				if(length > 200){
+//					vo.setContentHasMore(true);
+//					length = 200;
+//				}
+//				vo.setContent(post.getContent().substring(0, length));
+//				vo.setTitle(post.getTitle());
+//				vo.setCreateTime(post.getCreateTime());
+//				UserVo user;
+//				if((user = userMap.get(post.getUserId())) != null){
+//					vo.setUserId(post.getUserId());
+//					vo.setAvatar(user.getAvatar());
+//					vo.setNickname(user.getNickname());
+//					vo.setUserLanguages(user.getLanguages());
+//				}
+//			} else {
+//				Comment comment = commentMap.get(bookmark.getReferenceId());
+//				vo.setReferenceId(comment.getId());
+//				vo.setId(comment.getId());
+//				int length = comment.getContent().length();
+//				if(length > 200){
+//					vo.setContentHasMore(true);
+//					length = 200;
+//				}
+//				vo.setContent(comment.getContent().substring(0, length));
+//				vo.setCreateTime(comment.getCreateTime());
+//				UserVo user;
+//				if((user = userMap.get(comment.getUserId())) != null){
+//					vo.setUserId(comment.getUserId());
+//					vo.setAvatar(user.getAvatar());
+//					vo.setNickname(user.getNickname());
+//					vo.setUserLanguages(user.getLanguages());
+//				}
+//			}
+//			return vo;
+//		}).filter(vo -> vo.getUserId() != null).toList();
+//	}
+//
+//	@Override
+//	public Boolean removeBookmark(BookmarkNewDto dto) {
+//		Long userId = BaseContext.getUserId();
+//		return bookmarkService.remove(
+//				new LambdaQueryWrapper<Bookmark>()
+//						.eq(Bookmark::getUserId, userId)
+//						.eq(Bookmark::getReferenceId, dto.getId())
+//						.eq(Bookmark::getType, dto.getType())
+//		);
+//	}
 
 
 	private String getFileExtension(String fileName){

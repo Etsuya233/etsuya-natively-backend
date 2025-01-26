@@ -98,8 +98,8 @@ public class LanguageServiceImpl implements LanguageService {
 			""";
 	private final SystemPromptTemplate TRANSLATION_PROMPT = new SystemPromptTemplate(TRANSLATION_SYSTEM_MESSAGE);
 	private final ChatOptions TRANSLATION_OPTIONS = OpenAiChatOptions.builder()
-			.withModel(OpenAiApi.ChatModel.GPT_4_O_MINI)
-			.withResponseFormat(new ResponseFormat(ResponseFormat.Type.JSON_SCHEMA, TRANSLATION_JSON_SCHEMA))
+			.model(OpenAiApi.ChatModel.GPT_4_O_MINI)
+			.responseFormat(new ResponseFormat(ResponseFormat.Type.JSON_SCHEMA, TRANSLATION_JSON_SCHEMA))
 			.build();
 
 	@Override
@@ -133,7 +133,7 @@ public class LanguageServiceImpl implements LanguageService {
 			""";
 	private final SystemPromptTemplate EXPLANATION_SYSTEM_PROMPT = new SystemPromptTemplate(EXPLANATION_SYSTEM_LANGUAGE);
 	private final ChatOptions EXPLANATION_OPTIONS = OpenAiChatOptions.builder()
-			.withModel(OpenAiApi.ChatModel.GPT_4_O_MINI)
+			.model(OpenAiApi.ChatModel.GPT_4_O_MINI)
 			.build();
 	
 	@Override

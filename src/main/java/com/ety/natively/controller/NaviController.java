@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutionException;
 @RestController
 @RequestMapping("/navi")
 @RequiredArgsConstructor
+@Deprecated
 public class NaviController {
 
 	private final NaviService naviService;

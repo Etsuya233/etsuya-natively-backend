@@ -2,10 +2,7 @@ package com.ety.natively.controller;
 
 
 import com.ety.natively.domain.R;
-import com.ety.natively.domain.dto.BookmarkNewDto;
-import com.ety.natively.domain.dto.CommentDto;
-import com.ety.natively.domain.dto.PostDto;
-import com.ety.natively.domain.dto.VoteDto;
+import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.Comment;
 import com.ety.natively.domain.vo.BookmarkVo;
 import com.ety.natively.domain.vo.CommentVo;
@@ -100,23 +97,4 @@ public class PostController {
 		List<PostInfoVo> ret = postService.getUserPosts(userId, lastId);
 		return R.ok(ret);
 	}
-
-	@PostMapping("/bookmark")
-	public R<Boolean> bookmark(@RequestBody BookmarkNewDto dto){
-		Boolean ret = postService.bookmark(dto);
-		return R.ok(ret);
-	}
-
-	@GetMapping("/bookmark")
-	public R<List<BookmarkVo>> getBookmarks(@RequestParam(required = false) Long lastId){
-		List<BookmarkVo> ret = postService.getBookmarks(lastId);
-		return R.ok(ret);
-	}
-
-	@DeleteMapping("/bookmark")
-	public R<Boolean> removeBookmark(@RequestBody BookmarkNewDto dto){
-		Boolean ret = postService.removeBookmark(dto);
-		return R.ok(ret);
-	}
-
 }

@@ -37,6 +37,9 @@ public enum ExceptionEnum {
 	POST_COMMENT_NOT_EXIST(3016, 200, "post.commentNotExist"),
 	POST_LANGUAGE_REQUIRED(3017, 200, "post.languageRequired"),
 	POST_UNSUPPORTED_LANGUAGE(3018, 200, "post.unsupportedLanguage"),
+	POST_BOOKMARK_CONTENT_LIMIT(3019, 200, "post.bookmarkContentLimit"),
+	POST_BOOKMARK_NOTE_LIMIT(3020, 200, "post.bookmarkNoteLimit"),
+	POST_BOOKMARK_NOT_EXIST(3021, 200, "post.bookmarkNotExist"),
 
 	CHAT_NOT_CONTACT(4001, 200, "chat.notContact"),
 

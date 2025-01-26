@@ -3,8 +3,8 @@ package com.ety.natively.domain.dto;
 import lombok.Data;
 
 @Data
-@Deprecated
-public class BookmarkNewDto {
+public class BookmarkUpdateDto {
 	private Long id;
-	private Integer type;
+	private String content;
+	private String note;
 }

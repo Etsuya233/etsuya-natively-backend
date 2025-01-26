@@ -4,16 +4,23 @@ import com.ety.natively.interceptor.LocaleInterceptor;
 import com.ety.natively.interceptor.UserInfoInterceptor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.elasticsearch.RestClientBuilderCustomizer;
+import org.springframework.boot.web.client.ClientHttpRequestFactories;
+import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
+import org.springframework.boot.web.client.RestClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.time.Duration;
 
 @Configuration
 @Slf4j
@@ -66,5 +73,12 @@ public class MvcConfig implements WebMvcConfigurer {
 		configurer.setTaskExecutor(taskExecutor());
 		configurer.setDefaultTimeout(300000);  // 默认超时时间，单位是毫秒
 	}
+
+//	@Bean
+//	public RestClientCustomizer restClientCustomizer() {
+//		return restClientBuilder -> restClientBuilder.requestFactory(ClientHttpRequestFactories.get(ClientHttpRequestFactorySettings.DEFAULTS
+//				.withConnectTimeout(Duration.ofSeconds(5))
+//				.withReadTimeout(Duration.ofSeconds(30))));
+//	}
 
 }

@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  * </p>
  *
  * @author Etsuya
- * @since 2024-12-02
+ * @since 2025-01-22
  */
 public interface BookmarkMapper extends BaseMapper<Bookmark> {
 

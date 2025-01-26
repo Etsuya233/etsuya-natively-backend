@@ -175,12 +175,15 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
 	@Override
 	public List<ChatMessageVo> loadMoreOldMessage(Long userId, String lastId) {
+		Long currentUserId = BaseContext.getUserId();
 		List<ChatMessage> messages = this.lambdaQuery()
 				.lt(lastId != null, ChatMessage::getId, lastId)
 				.eq(ChatMessage::getSenderId, userId)
+				.eq(ChatMessage::getReceiverId, currentUserId)
 				.or()
 				.lt(lastId != null, ChatMessage::getId, lastId)
 				.eq(ChatMessage::getReceiverId, userId)
+				.eq(ChatMessage::getSenderId, currentUserId)
 				.orderByDesc(ChatMessage::getId)
 				.last("limit 10")
 				.list();

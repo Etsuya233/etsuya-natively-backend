@@ -11,11 +11,12 @@ public class BookmarkVo {
 	private Long referenceId;
 	private Integer type;
 	private String title;
-	private String content;
 	private Long userId;
 	private List<UserLanguageVo> userLanguages;
 	private String nickname;
 	private String avatar;
+	private String note;
+	private String content;
 	private LocalDateTime createTime;
 	private Boolean contentHasMore;
 }

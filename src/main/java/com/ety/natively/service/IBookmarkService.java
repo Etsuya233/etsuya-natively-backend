@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  * </p>
  *
  * @author Etsuya
- * @since 2024-12-02
+ * @since 2025-01-22
  */
 public interface IBookmarkService extends IService<Bookmark> {
 

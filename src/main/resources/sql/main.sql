@@ -196,14 +196,24 @@ create table attachment (
     create_time datetime(3) default current_timestamp(3) comment '创建时间UTC'
 );
 
+# create table bookmark (
+#     id bigint primary key not null comment '书签ID',
+#     reference_id bigint not null comment '对应收藏内容的ID',
+#     user_id bigint not null comment '用户ID',
+#     type tinyint not null default 1 comment '1，贴子 2，评论',
+#     create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
+#     update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间',
+#     unique(reference_id, user_id, type)
+# );
+
 create table bookmark (
-    id bigint primary key not null comment '书签ID',
-    reference_id bigint not null comment '对应收藏内容的ID',
-    user_id bigint not null comment '用户ID',
-    type tinyint not null default 1 comment '1，贴子 2，评论',
-    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC',
-    update_time datetime(3) default current_timestamp(3) on update current_timestamp(3) comment '更新时间',
-    unique(reference_id, user_id, type)
+    id bigint primary key not null comment 'Bookmark ID',
+    user_id bigint not null,
+    reference_id bigint comment '收藏内容ID（可选）',
+    content text comment '收藏内容（可选）',
+    type tinyint not null default 0 comment '类型：0 文本 1 帖子 2 评论',
+    note varchar(1024) comment '收藏备注',
+    create_time datetime(3) default current_timestamp(3) comment '创建时间UTC'
 );
 
 create table chat_message (

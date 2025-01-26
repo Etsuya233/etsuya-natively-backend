@@ -18,20 +18,15 @@ import com.ety.natively.utils.MinioUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -51,6 +46,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 	private final ICommentService commentService;
 	private final IPostLanguageService postLanguageService;
 	private final PostLanguageMapper postLanguageMapper;
+	private final IBookmarkService bookmarkService;
 
 	@Override
 	public String getCreatePostVerificationCode() {
@@ -318,7 +314,10 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 	@Override
 	@Transactional
 	public VoteCompleteVo vote(VoteDto dto) {
+		Long userId = BaseContext.getUserId();
+
 		Vote vote = this.voteService.lambdaQuery()
+				.eq(Vote::getUserId, userId)
 				.eq(dto.getPost(), Vote::getPostId, dto.getId())
 				.eq(!dto.getPost(), Vote::getCommentId, dto.getId())
 				.one();
@@ -332,6 +331,9 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			summary = this.commentSummaryService.lambdaQuery()
 					.eq(CommentSummary::getCommentId, dto.getId())
 					.one();
+		}
+		if(summary == null) {
+			throw new BaseException(ExceptionEnum.UNKNOWN_ERROR);
 		}
 
 		// vote the same before
@@ -393,6 +395,27 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			}
 		}
 
+		if(dto.getType() == 0){
+			if(vote != null){
+				this.voteService.removeById(vote.getId());
+			}
+		} else {
+			if(vote != null){
+				vote.setType(dto.getType() == 1);
+				this.voteService.updateById(vote);
+			} else {
+				Vote vo = new Vote();
+				vo.setUserId(userId);
+				if(dto.getPost()){
+					vo.setPostId(dto.getId());
+				} else {
+					vo.setCommentId(dto.getId());
+				}
+				vo.setType(dto.getType() == 1);
+				this.voteService.save(vo);
+			}
+		}
+
 		// ret
 		VoteCompleteVo ret = new VoteCompleteVo();
 		ret.setUpvoteCount(summary.getUpvoteCount() + upvoteDelta);
@@ -402,8 +425,9 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		return ret;
 	}
 
+	// TODO cascade counting
 	@Override
-	public Long createComment(Long postId, Long parentId, String content,
+	public Long createComment(Long parentId, String content,
 							  MultipartFile image, MultipartFile voice, String compare) {
 		Long userId = BaseContext.getUserId();
 
@@ -411,7 +435,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 
 		int contentLength = 0;
 
-		comment.setPostId(postId);
+		comment.setPostId(0L);
 		comment.setParentId(parentId);
 		comment.setUserId(userId);
 		comment.setContent(content);
@@ -462,6 +486,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		// insert
 		commentService.save(comment);
 
+		//
+
 
 		// summary
 		CommentSummary summary = new CommentSummary();
@@ -493,6 +519,14 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				.list()
 				.stream()
 				.collect(Collectors.toMap(CommentSummary::getCommentId, Function.identity()));
+
+		// vote
+		List<Vote> voteList = voteService.lambdaQuery()
+				.in(Vote::getCommentId, commentIds)
+				.list();
+		Map<Long, Vote> voteMap = voteList
+				.stream()
+				.collect(Collectors.toMap(Vote::getCommentId, Function.identity()));
 
 		// user
 		List<Long> userIds = comments.stream().map(Comment::getUserId).toList();
@@ -530,6 +564,13 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				vo.setUpvote(0L);
 				vo.setDownvote(0L);
 				vo.setCommentCount(0L);
+			}
+
+			Vote vote = voteMap.get(comment.getId());
+			if(vote != null){
+				vo.setVote(vote.getType()? 1: -1);
+			} else {
+				vo.setVote(0);
 			}
 
 			return vo;
@@ -627,6 +668,186 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		return vo;
 	}
 
+	@Override
+	public void createBookmark(BookmarkCreateDto dto) {
+		Integer type = dto.getType();
+		Long referenceId = dto.getReferenceId();
+		String content = dto.getContent();
+		String note = dto.getNote();
+
+		// validation
+		if(type == null || type < 0 || type >= 3){
+			throw new BaseException(ExceptionEnum.UNKNOWN_ERROR);
+		}
+		if(content != null && content.length() > Constant.BOOKMARK_CONTENT_LIMIT){
+			throw new BaseException(ExceptionEnum.POST_BOOKMARK_CONTENT_LIMIT);
+		}
+		if(note != null && note.length() > Constant.BOOKMARK_NOTE_LIMIT){
+			throw new BaseException(ExceptionEnum.POST_BOOKMARK_NOTE_LIMIT);
+		}
+
+		// pack
+		Long userId = BaseContext.getUserId();
+		Bookmark bookmark = new Bookmark();
+		bookmark.setType(type);
+		bookmark.setUserId(userId);
+		bookmark.setNote(note);
+		if(type.equals(BookmarkType.TEXT)){
+			bookmark.setContent(content);
+		} else if(type.equals(BookmarkType.POST)){
+			Long count = this.lambdaQuery()
+					.eq(Post::getId, referenceId)
+					.count();
+			if(count > 0){
+				bookmark.setReferenceId(referenceId);
+			}
+		} else {
+			Long count = this.commentService.lambdaQuery()
+					.eq(Comment::getId, referenceId)
+					.count();
+			if(count > 0){
+				bookmark.setReferenceId(referenceId);
+			}
+		}
+
+		bookmarkService.save(bookmark);
+	}
+
+	@Override
+	public void deleteBookmark(Long id) {
+		Long userId = BaseContext.getUserId();
+		Bookmark bookmark = this.bookmarkService.getById(id);
+		if(bookmark == null || !bookmark.getUserId().equals(userId)){
+			throw new BaseException(ExceptionEnum.POST_BOOKMARK_NOT_EXIST);
+		}
+		bookmarkService.removeById(id);
+	}
+
+	@Override
+	public List<BookmarkVo> getBookmark(Long lastId) {
+		Long userId = BaseContext.getUserId();
+
+		// query db
+		List<Bookmark> bookmarks = this.bookmarkService.lambdaQuery()
+				.eq(Bookmark::getUserId, userId)
+				.lt(lastId != null, Bookmark::getId, lastId)
+				.last("limit 10")
+				.list();
+
+		Map<Integer, List<Bookmark>> bookmarkClassified = bookmarks
+				.stream()
+				.collect(Collectors.groupingBy(Bookmark::getType));
+		// post
+		List<Bookmark> bookmarksOfPost = bookmarkClassified.get(BookmarkType.POST);
+		List<Long> postIds = bookmarksOfPost.stream()
+				.map(Bookmark::getReferenceId)
+				.toList();
+		List<Post> posts = this.lambdaQuery()
+				.in(Post::getId, postIds)
+				.list();
+		Map<Long, Post> postMap = posts.stream()
+				.collect(Collectors.toMap(Post::getId, Function.identity()));
+		List<Long> userIds = new ArrayList<>(posts.stream().map(Post::getUserId).toList());
+		// comment
+		List<Bookmark> bookmarksOfComment = bookmarkClassified.get(BookmarkType.COMMENT);
+		List<Long> commentIds = bookmarksOfComment.stream()
+				.map(Bookmark::getId)
+				.toList();
+		List<Comment> comments = this.commentService.lambdaQuery()
+				.in(Comment::getId, commentIds)
+				.list();
+		Map<Long, Comment> commentMap = comments.stream()
+				.collect(Collectors.toMap(Comment::getId, Function.identity()));
+		userIds.addAll(comments.stream()
+				.map(Comment::getUserId)
+				.toList());
+		// user
+		List<UserVo> users = userService.getUserByIds(userIds);
+		Map<Long, UserVo> userMap = users.stream()
+				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
+
+		// pack
+		return bookmarks.stream().map(bookmark -> {
+			BookmarkVo vo = new BookmarkVo();
+			BeanUtils.copyProperties(bookmark, vo);
+
+			Long referenceUserId = null;
+			if(bookmark.getType().equals(BookmarkType.POST)){
+				Long postId = bookmark.getReferenceId();
+				Post post = postMap.get(postId);
+				if(post == null){
+					return null;
+				}
+				referenceUserId = post.getUserId();
+				vo.setUserId(post.getUserId());
+				vo.setContent(post.getPreviewText());
+				vo.setContentHasMore(post.getPreviewHasMore());
+			} else if(bookmark.getType().equals(BookmarkType.COMMENT)){
+				Long referenceId = bookmark.getReferenceId();
+				Comment comment = commentMap.get(referenceId);
+				if(comment == null){
+					return null;
+				}
+				referenceUserId = comment.getUserId();
+				vo.setContent(comment.getContent());
+			}
+
+			if(!bookmark.getType().equals(BookmarkType.TEXT)){
+				UserVo user = userMap.get(referenceUserId);
+				if(user == null){
+					return null;
+				}
+				vo.setUserId(user.getId());
+				vo.setAvatar(user.getAvatar());
+				vo.setUserLanguages(user.getLanguages());
+				vo.setNickname(user.getNickname());
+			}
+
+			return vo;
+		}).filter(Objects::nonNull).toList();
+	}
+
+	@Override
+	public List<PostPreview> getUserPost(Long userId, Long lastId) {
+		// todo validation
+		List<Post> posts = this.lambdaQuery()
+				.eq(Post::getUserId, userId)
+				.lt(lastId != null, Post::getId, lastId)
+				.last("limit 10")
+				.list();
+		return getPostPreview(posts);
+	}
+
+	@Override
+	public void updateBookmark(BookmarkUpdateDto dto) {
+		Long id = dto.getId();
+		String content = dto.getContent();
+		String note = dto.getNote();
+
+		Long userId = BaseContext.getUserId();
+
+		Bookmark bookmark = this.bookmarkService.lambdaQuery()
+				.eq(Bookmark::getUserId, userId)
+				.eq(Bookmark::getId, id)
+				.one();
+		if(bookmark == null){
+			throw new BaseException(ExceptionEnum.POST_BOOKMARK_NOT_EXIST);
+		}
+
+		if(content != null && content.length() > Constant.BOOKMARK_CONTENT_LIMIT){
+			throw new BaseException(ExceptionEnum.POST_CONTENT_OVER_LIMIT);
+		}
+		if(note != null && note.length() > Constant.BOOKMARK_NOTE_LIMIT){
+			throw new BaseException(ExceptionEnum.POST_CONTENT_OVER_LIMIT);
+		}
+
+		this.bookmarkService.lambdaUpdate()
+				.eq(Bookmark::getId, id)
+				.set(bookmark.getType().equals(BookmarkType.TEXT), Bookmark::getContent, content)
+				.set(Bookmark::getNote, note)
+				.update();
+	}
+
 	private List<PostPreview> getPostPreview(List<Post> posts) {
 		if (CollUtil.isEmpty(posts)) {
 			return new ArrayList<>();
@@ -666,7 +887,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			preview.setId(post.getId());
 			preview.setType(post.getType());
 			preview.setTitle(post.getTitle());
-			preview.setText(post.getPreviewText());
+			preview.setContent(post.getPreviewText());
 			preview.setImage(post.getPreviewImage());
 			preview.setVoice(post.getPreviewVoice());
 			preview.setHasMore(post.getPreviewHasMore());

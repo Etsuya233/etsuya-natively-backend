@@ -1,9 +1,6 @@
 package com.ety.natively.service;
 
-import com.ety.natively.domain.dto.BookmarkNewDto;
-import com.ety.natively.domain.dto.CommentDto;
-import com.ety.natively.domain.dto.PostDto;
-import com.ety.natively.domain.dto.VoteDto;
+import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.Post;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ety.natively.domain.vo.BookmarkVo;
@@ -42,9 +39,11 @@ public interface IPostService extends IService<Post> {
 
 	List<PostInfoVo> getUserPosts(Long userId, Long lastId);
 
-	Boolean bookmark(BookmarkNewDto dto);
+//	void createBookmark(BookmarkCreateDto dto);
 
-	List<BookmarkVo> getBookmarks(Long lastId);
-
-	Boolean removeBookmark(BookmarkNewDto dto);
+//	Boolean bookmark(BookmarkNewDto dto);
+//
+//	List<BookmarkVo> getBookmarks(Long lastId);
+//
+//	Boolean removeBookmark(BookmarkNewDto dto);
 }

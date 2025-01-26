@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.concurrent.CompletableFuture;
 
+@Deprecated
 public interface NaviService {
 	NaviResult askNavi(NaviRequestDto dto);
 

@@ -5,6 +5,5 @@ import lombok.Data;
 @Data
 public class TranslationVo {
 	private String originalLanguage;
-	private String targetLanguage;
 	private String translation;
 }

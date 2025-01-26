@@ -24,7 +24,7 @@ public class PostPreview {
 
 	private String title;
 	private Integer type;
-	private String text;
+	private String content;
 	private String image;
 	private String voice;
 	private Boolean hasMore;
