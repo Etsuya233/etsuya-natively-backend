@@ -9,7 +9,8 @@ import java.util.List;
 public class CommentVoV2 {
 	private Long id;
 	private Long parentId;
-	private Boolean post;
+//	private Boolean post;
+	private Long postId;
 
 	private String nickname;
 	private Long userId;

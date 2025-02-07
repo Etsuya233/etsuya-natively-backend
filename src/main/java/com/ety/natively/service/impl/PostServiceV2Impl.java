@@ -17,13 +17,13 @@ import com.ety.natively.utils.I18NUtil;
 import com.ety.natively.utils.MinioUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.stats.ConcurrentStatsCounter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
@@ -281,7 +281,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				.lt(lastId != null, PostLanguage::getPostId, lastId)
 				.in(PostLanguage::getLang, languages)
 				.orderByDesc(PostLanguage::getPostId)
-				.last("limit 30")
+				.last("limit 8")
 				.list();
 		List<Long> preIds = postLanguages.stream()
 				.map(PostLanguage::getPostId)
@@ -307,8 +307,54 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		List<Post> posts = this.lambdaQuery()
 				.in(Post::getId, postIds)
 				.list();
+		if(posts.isEmpty()) {
+			return new ArrayList<>();
+		}
+		posts.sort(Post.compareByIdDesc);
 
 		return getPostPreview(posts);
+	}
+
+	@Override
+	public List<PostPreview> getPostByFollowing(Long lastId) {
+		Long userId = BaseContext.getUserId();
+
+		List<Post> posts = this.getBaseMapper().getUserFollowingFeed(userId, lastId);
+
+		return getPostPreview(posts);
+	}
+
+	@Override
+	public List<PostPreview> getPostTrending(Integer rank) {
+		if (Constant.POST_TRENDING_RECORDING.get()) {
+			return new ArrayList<>();
+		}
+
+		// get trending post ids
+		int size = Constant.POST_TRENDING_ID_LIST.size();
+		if(size == 0){
+			return new ArrayList<>();
+		}
+		int l = rank - 1, r = Math.min(size, rank + 5);
+		List<Long> ids = Constant.POST_TRENDING_ID_LIST.subList(l, r);
+
+		if(ids.isEmpty()){
+			return new ArrayList<>();
+		}
+
+		// get trending posts
+		List<Post> posts = this.lambdaQuery()
+				.in(Post::getId, ids)
+				.list();
+
+		// get sorted trending posts
+		Map<Long, Post> postMap = posts.stream().collect(Collectors.toMap(Post::getId, Function.identity()));
+		List<Post> postSorted = new ArrayList<>();
+		for(Long id: ids){
+			postSorted.add(postMap.get(id));
+		}
+
+		return this.getPostPreview(postSorted);
 	}
 
 	@Override
@@ -416,6 +462,18 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			}
 		}
 
+		// score todo move the mq
+		if(dto.getPost() && dto.getType() == 1){
+			redisTemplate.opsForZSet().incrementScore(RedisConstant.POST_SCORE, dto.getId().toString(), 1);
+		} else if(!dto.getPost() && dto.getType() == 1) {
+			Comment comment = this.commentService.lambdaQuery()
+					.eq(Comment::getId, dto.getId())
+					.select(Comment::getPostId)
+					.one();
+			Long postId = comment.getPostId();
+			redisTemplate.opsForZSet().incrementScore(RedisConstant.POST_SCORE, postId.toString(), 1);
+		}
+
 		// ret
 		VoteCompleteVo ret = new VoteCompleteVo();
 		ret.setUpvoteCount(summary.getUpvoteCount() + upvoteDelta);
@@ -425,9 +483,9 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		return ret;
 	}
 
-	// TODO cascade counting
+	// TODO cascade counting (using mq), do it when we do system optimization
 	@Override
-	public Long createComment(Long parentId, String content,
+	public Long createComment(Long postId, Long parentId, String content,
 							  MultipartFile image, MultipartFile voice, String compare) {
 		Long userId = BaseContext.getUserId();
 
@@ -435,7 +493,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 
 		int contentLength = 0;
 
-		comment.setPostId(0L);
+		comment.setPostId(postId);
 		comment.setParentId(parentId);
 		comment.setUserId(userId);
 		comment.setContent(content);
@@ -486,8 +544,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		// insert
 		commentService.save(comment);
 
-		//
-
+		// score
+		redisTemplate.opsForZSet().incrementScore(RedisConstant.POST_SCORE, postId.toString(), 3);
 
 		// summary
 		CommentSummary summary = new CommentSummary();
@@ -503,7 +561,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				.eq(Comment::getParentId, id)
 				.gt(lastId != null, Comment::getId, lastId)
 				.orderByAsc(Comment::getId)
-				.last("limit 15")
+				.last("limit 10")
 				.list();
 		if(comments == null || comments.isEmpty()){
 			return new ArrayList<>();
@@ -538,8 +596,9 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			CommentVoV2 vo = new CommentVoV2();
 			vo.setId(comment.getId());
 			vo.setParentId(id);
-			vo.setPost(post);
+//			vo.setPost(post);
 			vo.setCreateTime(comment.getCreateTime());
+			vo.setPostId(comment.getPostId());
 
 			vo.setContent(comment.getContent());
 			vo.setImage(comment.getImage());
@@ -610,6 +669,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		vo.setTitle(post.getTitle());
 		vo.setContent(post.getContent());
 		vo.setCreateTime(post.getCreateTime());
+		vo.setPreviewImage(post.getPreviewImage());
 
 		vo.setNickname(user.getNickname());
 		vo.setAvatar(user.getAvatar());
@@ -751,7 +811,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		// comment
 		List<Bookmark> bookmarksOfComment = bookmarkClassified.get(BookmarkType.COMMENT);
 		List<Long> commentIds = bookmarksOfComment.stream()
-				.map(Bookmark::getId)
+				.map(Bookmark::getReferenceId)
 				.toList();
 		List<Comment> comments = this.commentService.lambdaQuery()
 				.in(Comment::getId, commentIds)
@@ -848,7 +908,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				.update();
 	}
 
-	private List<PostPreview> getPostPreview(List<Post> posts) {
+	@Override
+	public List<PostPreview> getPostPreview(List<Post> posts) {
 		if (CollUtil.isEmpty(posts)) {
 			return new ArrayList<>();
 		}
@@ -883,6 +944,10 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 
 		// pack
 		return posts.stream().sorted(Post.compareByIdDesc).map(post -> { // todo sort before map!!!
+			if(post == null){
+				return null;
+			}
+
 			PostPreview preview = new PostPreview();
 			preview.setId(post.getId());
 			preview.setType(post.getType());
@@ -921,6 +986,6 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			}
 
 			return preview;
-		}).filter(post -> post.getUserId() != null).toList();
+		}).filter(post -> post == null || post.getUserId() != null).toList();
 	}
 }

@@ -5,10 +5,7 @@ import cn.hutool.json.JSONUtil;
 import com.ety.natively.domain.R;
 import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
-import com.ety.natively.domain.vo.FollowVo;
-import com.ety.natively.domain.vo.LoginVo;
-import com.ety.natively.domain.vo.OAuth2LoginVo;
-import com.ety.natively.domain.vo.UserVo;
+import com.ety.natively.domain.vo.*;
 import com.ety.natively.service.IUserService;
 import com.ety.natively.utils.BaseContext;
 import com.ety.natively.utils.TranslationUtil;
@@ -24,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;
@@ -120,6 +118,12 @@ public class UserController {
 		return R.ok(ret);
 	}
 
+	@PutMapping("/unlink")
+	public R<Void> oAuth2Unlink(@RequestBody OAuth2UnlinkDto request){
+		userService.oAuth2Unlink(request);
+		return R.ok();
+	}
+
 	@GetMapping("/contact")
 	public R<List<UserVo>> getContacts(@RequestParam(value = "lastId", required = false) Long lastId){
 		List<UserVo> ret = userService.getContacts(lastId);
@@ -130,6 +134,32 @@ public class UserController {
 	public R<FollowVo> follow(@RequestBody UserFollowDto dto){
 		FollowVo ret = userService.follow(dto);
 		return R.ok(ret);
+	}
+
+	@GetMapping("/linked")
+	public R<List<UserLinkedAccountVo>> getUserLinkedAccounts(){
+		List<UserLinkedAccountVo> linkedAccounts = userService.getUserLinkedAccounts();
+		return R.ok(linkedAccounts);
+	}
+
+	@GetMapping("/following")
+	public R<List<UserVo>> getFollowing(@RequestParam(value = "userId") Long userId,
+										@RequestParam(value = "lastId", required = false) Long lastId){
+		List<UserVo> ret = userService.getFollowing(userId, lastId);
+		return R.ok(ret);
+	}
+
+	@GetMapping("/follower")
+	public R<List<UserVo>> getFollowers(@RequestParam(value = "userId") Long userId,
+										@RequestParam(value = "lastId", required = false) Long lastId){
+		List<UserVo> ret = userService.getFollowers(userId, lastId);
+		return R.ok(ret);
+	}
+
+	@PostMapping("/avatar")
+	public R<String> uploadAvatar(@RequestParam(value = "avatar") MultipartFile avatar){
+		String url = userService.uploadAvatar(avatar);
+		return R.ok(url);
 	}
 
 }

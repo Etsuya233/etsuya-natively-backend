@@ -1,5 +1,6 @@
 package com.ety.natively.config;
 
+import com.ety.natively.domain.WebSocketPrincipal;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
 import com.ety.natively.utils.BaseContext;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -19,7 +21,10 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.security.Principal;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -37,7 +42,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 	public void registerStompEndpoints(StompEndpointRegistry registry) {
 		// 定义了连接WebSocket的端点，前端时使用这个来连接后端
 		// 如果不用Stomp，可以使用WebSocketHandler
-		registry.addEndpoint("/chat/connect")
+		registry.addEndpoint("/websocket/connect")
 				.setAllowedOriginPatterns("*")
 				.withSockJS();
 	}
@@ -79,15 +84,29 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 				log.debug("{}: {}", accessor.getSessionId(), accessor.getCommand());
 
 				if(StompCommand.CONNECT.equals(accessor.getCommand())) {
+					// Authorization
 					List<String> authorizationHeaders = accessor.getNativeHeader("Authorization");
 					if(authorizationHeaders == null || authorizationHeaders.isEmpty()) {
 						throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
 					}
 					String token = authorizationHeaders.getFirst();
 					token = token.substring(7);
+
+					// User
 					Long userId = userUtils.authenticateUser(token);
-					accessor.setUser(() -> String.valueOf(userId));
-					BaseContext.setUserId(userId);
+					WebSocketPrincipal principal = new WebSocketPrincipal();
+					principal.setName(userId.toString());
+					principal.setUserId(userId);
+					accessor.setUser(principal);
+
+					// Language
+					List<String> languageHeaders = accessor.getNativeHeader("Language");
+					if(languageHeaders != null && !languageHeaders.isEmpty()) {
+						String language = languageHeaders.getFirst();
+						Locale locale = Locale.of(language);
+						principal.setLanguage(locale);
+					}
+
 					log.debug("用户 {} 已连接至WebSocket", userId);
 				}
 
@@ -97,7 +116,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
 				return message;
 			}
+
+			@Override
+			public boolean preReceive(MessageChannel channel) {
+				return ChannelInterceptor.super.preReceive(channel);
+			}
 		});
+
 	}
 
 

@@ -11,6 +11,7 @@ public class PostVo {
 
 	private String title;
 	private String content;
+	private String previewImage;
 
 	private Long userId;
 	private Integer type;

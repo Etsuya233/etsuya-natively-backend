@@ -44,17 +44,21 @@ public class UserInfoInterceptor implements HandlerInterceptor {
 			notNeedLogin &= authProperties.getAuthPath()
 				.stream()
 				.noneMatch(s -> antPathMatcher.match(s, uri));
-		if(notNeedLogin) return true;
 
 		//开始验证登陆状态
-		String header = request.getHeader("Authorization");
-		if(StrUtil.isBlank(header) || header.length() < 7){
-			throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
+		Long userId = null;
+		try {
+			String header = request.getHeader("Authorization");
+			if(StrUtil.isBlank(header) || header.length() < 7){
+				throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
+			}
+			String token = header.substring(7); //Bearer ABCDEFG
+			userId = userUtils.authenticateUser(token);
+		} catch (Exception e){
+			if(!notNeedLogin){
+				throw new BaseException(ExceptionEnum.USER_ACCESS_TOKEN_FAILED);
+			}
 		}
-
-		String token = header.substring(7); //Bearer ABCDEFG
-
-		Long userId = userUtils.authenticateUser(token);
 
 		//获取信息
 		BaseContext.setUserId(userId);

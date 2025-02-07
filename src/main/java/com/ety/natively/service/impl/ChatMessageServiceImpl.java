@@ -10,6 +10,7 @@ import com.ety.natively.domain.vo.ConversationVo;
 import com.ety.natively.domain.vo.UserVo;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
+import com.ety.natively.exception.BaseWSException;
 import com.ety.natively.mapper.ChatMessageMapper;
 import com.ety.natively.mapper.ChatUnreadMapper;
 import com.ety.natively.mapper.ConversationMapper;
@@ -66,7 +67,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
 		// check if we are friend
 		if(!userService.checkIsContact(senderId, receiverId)){
-			throw new BaseException(ExceptionEnum.CHAT_NOT_CONTACT, receiverId);
+			throw new BaseWSException(ExceptionEnum.CHAT_NOT_CONTACT, "/queue/chat/message", receiverId);
 		}
 
 		//save

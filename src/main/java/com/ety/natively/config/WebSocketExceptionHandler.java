@@ -3,6 +3,7 @@ package com.ety.natively.config;
 import com.ety.natively.domain.R;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
+import com.ety.natively.exception.BaseWSException;
 import com.ety.natively.utils.TranslationUtil;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -26,13 +27,17 @@ public class WebSocketExceptionHandler {
 		log.info("WebSocketExceptionsHandler已创建");
 	}
 
-	@MessageExceptionHandler(BaseException.class)
-	public void handleCustomException(BaseException e, Principal principal){
+	@MessageExceptionHandler(BaseWSException.class)
+	public void handleCustomException(BaseWSException e, Principal principal){
 		log.debug("自定义异常：通用：", e);
 		ExceptionEnum exceptionEnum = e.getExceptionEnum();
+		String destination = e.getDestination();
+		if(destination == null){
+			destination = "/queue/system";
+		}
 		messagingTemplate.convertAndSendToUser(
 				principal.getName(),
-				"/queue/chat/message",
+				destination,
 				R.error(exceptionEnum.getErrorCode(), t.get("ex." + exceptionEnum.getErrorMsgKey(), e.getExceptionArgs())));
 	}
 
@@ -41,7 +46,7 @@ public class WebSocketExceptionHandler {
 		log.error("其他异常：", e);
 		messagingTemplate.convertAndSendToUser(
 				principal.getName(),
-				"/queue/chat/message",
+				"/queue/system",
 				R.error("ex.unknown"));
 	}
 

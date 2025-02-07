@@ -10,18 +10,17 @@ import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.po.UserLanguage;
 import com.ety.natively.domain.po.UserOauth;
 import com.ety.natively.domain.po.UserRelationship;
-import com.ety.natively.domain.vo.FollowVo;
-import com.ety.natively.domain.vo.LoginVo;
-import com.ety.natively.domain.vo.OAuth2LoginVo;
-import com.ety.natively.domain.vo.UserVo;
+import com.ety.natively.domain.vo.*;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
 import com.ety.natively.mapper.UserLanguageMapper;
 import com.ety.natively.mapper.UserMapper;
+import com.ety.natively.mapper.UserRelationshipMapper;
 import com.ety.natively.properties.MinioProperties;
 import com.ety.natively.properties.OAuth2Properties;
 import com.ety.natively.service.*;
 import com.ety.natively.utils.BaseContext;
+import com.ety.natively.utils.I18NUtil;
 import com.ety.natively.utils.JwtUtils;
 import com.ety.natively.utils.MinioUtils;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -33,8 +32,11 @@ import com.google.api.services.people.v1.PeopleService;
 import com.google.api.services.people.v1.PeopleServiceScopes;
 import com.google.api.services.people.v1.model.EmailAddress;
 import com.google.api.services.people.v1.model.Person;
+import io.minio.GetObjectArgs;
+import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.errors.*;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.jetbrains.annotations.NotNull;
@@ -47,13 +49,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -82,6 +89,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	private final MinioUtils minioUtils;
 	private final IUserLanguageService userLanguageService;
 	private final IUserRelationshipService userRelationshipService;
+	private final UserRelationshipMapper userRelationshipMapper;
 
 	private Set<String> languageCodes;
 	private final Set<String> locations = new HashSet<>();
@@ -159,10 +167,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 				throw new BaseException(ExceptionEnum.USER_EMAIL_TAKEN);
 			}
 		}
-		//检查地区
-		if(!locations.contains(registerDto.getLocation())){
-			throw new BaseException(ExceptionEnum.USER_LOCATION_FAILED);
-		}
 		//检查语言列表
 		ArrayList<UserLanguage> languages = new ArrayList<>();
 		for (RegisterDto.LanguageSelection selection : registerDto.getLanguage()) {
@@ -230,7 +234,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	@Override
 	public UserVo getCurrent() {
 		Long id = BaseContext.getUserId();
-		return getUserInfo(id);
+
+		User user = this.getById(id);
+		user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
+		user.setPassword(null);
+		// 用户语言信息
+		List<UserLanguage> langs = userLanguageService.lambdaQuery()
+				.eq(UserLanguage::getUserId, id)
+				.list();
+		// vo
+		return UserVo.of(user, langs);
 	}
 
 	@Override
@@ -322,6 +335,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	}
 
 	@Override
+	@Transactional
 	public void modifyUserInfo(UserInfoModificationDto dto) {
 		Boolean unique = usernameUnique(dto.getUsername());
 		if(!unique){
@@ -329,7 +343,47 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		}
 		User user = BeanUtil.toBean(dto, User.class);
 		user.setId(BaseContext.getUserId());
+
+		// avatar
+		String avatar = dto.getAvatar();
+		String avatarFilename;
+		if(avatar == null){
+			avatarFilename = "user.png";
+		} else {
+			avatarFilename = avatar.substring(Math.min(avatar.length(), MinioConstant.AVATAR_BUCKET.length() + 7));
+		}
+		GetObjectArgs getObjectArgs = GetObjectArgs.builder()
+				.bucket(MinioConstant.AVATAR_BUCKET)
+				.object(avatarFilename)
+				.build();
+		try {
+			GetObjectResponse object = minioClient.getObject(getObjectArgs);
+			if(object == null){
+				avatarFilename = "user.png";
+			}
+		} catch (Exception e){
+			avatarFilename = "user.png";
+		}
+		user.setAvatar(avatarFilename);
 		this.updateById(user);
+
+		// language
+		List<UserLanguageVo> languages = dto.getLanguages();
+		Set<String> addedLanguage = new HashSet<>();
+		for (UserLanguageVo language : languages) {
+			String name = language.getLanguage();
+			Integer proficiency = language.getProficiency();
+			if(addedLanguage.contains(name)){
+				continue;
+			}
+			if(!I18NUtil.isSupportedLanguage(name)){
+				throw new BaseException(ExceptionEnum.USER_UNSUPPORTED_LANGUAGE);
+			}
+			if(proficiency == null || proficiency < 0 || proficiency > 5){
+				throw new BaseException(ExceptionEnum.USER_LANGUAGE_PROFICIENCY_FAILED);
+			}
+			addedLanguage.add(name);
+		}
 	}
 
 	@Override
@@ -465,6 +519,95 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		return followVo;
 	}
 
+	@Override
+	public List<UserLinkedAccountVo> getUserLinkedAccounts() {
+		Long userId = BaseContext.getUserId();
+		List<UserOauth> linked = this.userOauthService.lambdaQuery()
+				.in(UserOauth::getUserId, userId)
+				.list();
+		if(linked == null || linked.isEmpty()){
+			return new ArrayList<>();
+		}
+		return linked.stream().map(oauth -> {
+			UserLinkedAccountVo vo = new UserLinkedAccountVo();
+			vo.setOwner(oauth.getOwner());
+			vo.setLabel(oauth.getLabel());
+			return vo;
+		}).toList();
+	}
+
+	@Override
+	public void oAuth2Unlink(OAuth2UnlinkDto request) {
+		Long userId = BaseContext.getUserId();
+		UserOauth oauth = this.userOauthService.lambdaQuery()
+				.eq(UserOauth::getUserId, userId)
+				.eq(UserOauth::getOwner, request.getOwner())
+				.one();
+		this.userOauthService.removeById(oauth);
+	}
+
+	// todo order
+	// todo simplify user relationship (remove blocking status)
+	@Override
+	public List<UserVo> getFollowing(Long userId, Long lastId) {
+		List<UserRelationship> userRelationships = userRelationshipMapper.getFollowings(userId, lastId);
+		List<Long> userIds = userRelationships.stream()
+				.map(UserRelationship::getFolloweeId)
+				.toList();
+		if(userIds.isEmpty()){
+			return new ArrayList<>();
+		}
+		List<UserVo> users = this.getUserByIds(userIds);
+		Map<Long, UserVo> userVoMap = users
+				.stream()
+				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
+		// keep relationship_id order
+		List<UserVo> ret = new ArrayList<>();
+		for(int i = 0; i < userIds.size(); i++){
+			UserRelationship userRelationship = userRelationships.get(i);
+			UserVo user = userVoMap.get(userRelationship.getFolloweeId());
+			if(user != null){
+				ret.add(user);
+			}
+		}
+		return ret;
+	}
+
+	@Override
+	public List<UserVo> getFollowers(Long userId, Long lastId) {
+		List<UserRelationship> userRelationships = userRelationshipMapper.getFollowers(userId, lastId);
+		List<Long> userIds = userRelationships.stream()
+				.map(UserRelationship::getFollowerId)
+				.toList();
+		if(userIds.isEmpty()){
+			return new ArrayList<>();
+		}
+		List<UserVo> users = this.getUserByIds(userIds);
+		Map<Long, UserVo> userVoMap = users
+				.stream()
+				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
+		// keep relationship_id order
+		List<UserVo> ret = new ArrayList<>();
+		for(int i = 0; i < userIds.size(); i++){
+			UserRelationship userRelationship = userRelationships.get(i);
+			UserVo user = userVoMap.get(userRelationship.getFollowerId());
+			if(user != null){
+				ret.add(user);
+			}
+		}
+		return ret;
+	}
+
+	@Override
+	public String uploadAvatar(MultipartFile avatar) {
+		try {
+			String filename = minioUtils.uploadFile(avatar, MinioConstant.AVATAR_BUCKET);
+			return minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, filename);
+		} catch (Exception e) {
+			throw new BaseException(ExceptionEnum.USER_AVATAR_UPLOAD_FAILED);
+		}
+	}
+
 	//------------------- OAuth2 -------------------
 
 	private final List<String> oauthGoogleScopes = List.of(PeopleServiceScopes.USERINFO_PROFILE, PeopleServiceScopes.USERINFO_EMAIL);
@@ -479,16 +622,41 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	public OAuth2LoginVo oAuth2Login(OAuth2Request request) {
 		String owner = request.getOwner();
 		String code = request.getCode();
+		Long userId = BaseContext.getUserId();
 
-		return switch (owner) {
+		if(userId != null){
+			UserOauth oauth = this.userOauthService.lambdaQuery()
+					.eq(UserOauth::getUserId, userId)
+					.eq(UserOauth::getOwner, owner)
+					.one();
+			if(oauth != null){
+				throw new BaseException(ExceptionEnum.USER_OAUTH2_FAILED);
+			}
+		}
+
+		OAuth2Information info = switch (owner) {
 			case "google" -> oAuth2GoogleAuthentication(code);
 			case "github" -> oAuth2GithubAuthentication(code);
 			case "gitee" -> oAuth2GiteeAuthentication(code);
 			default -> null;
 		};
+
+		if(info == null){
+			throw new BaseException(ExceptionEnum.USER_OAUTH2_FAILED);
+		}
+
+		if(userId == null){
+			// Login or Register
+			return oAuth2LoginOrRegister(info);
+		} else {
+			// Binding
+			UserOauth userOauth = new UserOauth(null, userId, owner, info.getOwnerId(), info.getLabel(), true, null, null);
+			userOauthService.save(userOauth);
+			return new OAuth2LoginVo("binding", null, null);
+		}
 	}
 
-	private OAuth2LoginVo oAuth2GiteeAuthentication(String code) {
+	private OAuth2Information oAuth2GiteeAuthentication(String code) {
 		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("gitee");
 
 		Map<String, String> body = Map.of(
@@ -547,7 +715,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			email = (String) emailRes.getFirst().get("email");
 		}
 
-		return oAuth2Prediction(new OAuth2RegisterDto(nickname, email, avatar, giteeId, "gitee"));
+		return new OAuth2Information(nickname, email, email, avatar, giteeId, "gitee");
 	}
 
 	/**
@@ -555,7 +723,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	 * @param code code
 	 * @return 前端
 	 */
-	private OAuth2LoginVo oAuth2GithubAuthentication(String code) {
+	private OAuth2Information oAuth2GithubAuthentication(String code) {
 		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("github");
 
 		Map<String, String> body = Map.of(
@@ -605,7 +773,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		String avatar = (String) userInfoRes.get("avatar_url");
 		String email = (String) userInfoRes.get("email");
 
-		return oAuth2Prediction(new OAuth2RegisterDto(nickname, email, avatar, githubId, "github"));
+		return new OAuth2Information(nickname, email, email, avatar, githubId, "github");
 	}
 
 	/**
@@ -613,7 +781,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	 * @param code code
 	 * @return 前端
 	 */
-	private OAuth2LoginVo oAuth2GoogleAuthentication(String code) {
+	private OAuth2Information oAuth2GoogleAuthentication(String code) {
 		OAuth2Properties.OAuth2Config config = oAuth2Properties.getProvider().get("google");
 
 		//get access token
@@ -657,7 +825,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		}
 
 		//check if login or register
-		return oAuth2Prediction(new OAuth2RegisterDto(nickname, email, avatarUrlGoogle, googleId, "google"));
+		return new OAuth2Information(nickname, email, email, avatarUrlGoogle, googleId, "google");
 	}
 
 	/**
@@ -665,24 +833,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	 * @param dto 用来判断的东西
 	 * @return 前端返回值
 	 */
-	private OAuth2LoginVo oAuth2Prediction(OAuth2RegisterDto dto){
+	private OAuth2LoginVo oAuth2LoginOrRegister(OAuth2Information dto){
 		UserOauth userOauth = userOauthService.lambdaQuery()
 				.eq(UserOauth::getOwner, dto.getOwner())
 				.eq(UserOauth::getOwnerId, dto.getOwnerId())
 				.one();
 		if(userOauth == null){
-			OAuth2RegisterDto registerDto = new OAuth2RegisterDto(dto.getNickname(),
-					dto.getEmail(), dto.getAvatarUrl(), dto.getOwnerId(), dto.getOwner());
+			OAuth2Information registerDto = new OAuth2Information(dto.getNickname(),
+					dto.getEmail(), dto.getLabel(), dto.getAvatarUrl(), dto.getOwnerId(), dto.getOwner());
 			redisTemplate.opsForValue()
 					.set(RedisConstant.USER_OAUTH + dto.getOwner() + ":" + dto.getOwnerId(),
 							JSONUtil.toJsonStr(registerDto), RedisConstant.USER_OAUTH_TTL, TimeUnit.SECONDS);
-			return new OAuth2LoginVo(false, registerDto, null);
+			return new OAuth2LoginVo("register", registerDto, null);
 		} else {
 			User user = this.lambdaQuery()
 					.eq(User::getId, userOauth.getUserId())
 					.one();
 			LoginVo loginVo = loginSuccess(user);
-			return new OAuth2LoginVo(true, null, loginVo);
+			return new OAuth2LoginVo("login", null, loginVo);
 		}
 	}
 
@@ -691,10 +859,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		//get avatar
 		String registerDtoJson = redisTemplate.opsForValue()
 				.getAndDelete(RedisConstant.USER_OAUTH + owner + ":" + ownerId);
-		OAuth2RegisterDto registerDto = JSONUtil.toBean(registerDtoJson, OAuth2RegisterDto.class);
+		OAuth2Information registerDto = JSONUtil.toBean(registerDtoJson, OAuth2Information.class);
 
 		String avatarUrlOriginal = registerDto.getAvatarUrl();
 		String avatarUrl;
+		String label = registerDto.getLabel();
 		String avatarFileName = UUID.randomUUID().toString();
 		try {
 			URL url = new URI(avatarUrlOriginal).toURL();
@@ -718,7 +887,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 				.eq(User::getId, userId)
 				.set(User::getAvatar, avatarUrl)
 				.update();
-		UserOauth userOauth = new UserOauth(null, userId, owner, ownerId, true, null, null);
+		UserOauth userOauth = new UserOauth(null, userId, owner, ownerId, label, true, null, null);
 		userOauthService.save(userOauth);
 	}
 

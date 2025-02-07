@@ -1,10 +1,14 @@
 package com.ety.natively.domain.dto;
 
 import com.ety.natively.constant.RegexConstant;
+import com.ety.natively.domain.po.UserLanguage;
+import com.ety.natively.domain.vo.UserLanguageVo;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class UserInfoModificationDto {
@@ -17,13 +21,11 @@ public class UserInfoModificationDto {
 	@Pattern(regexp = RegexConstant.NICKNAME, message = "user.nicknameContentLimit")
 	private String nickname;
 
-	@Pattern(regexp = RegexConstant.GENDER, message = "user.genderContentLimit")
-	private Integer gender;
+//	@Pattern(regexp = RegexConstant.GENDER, message = "user.genderContentLimit")
+//	private Integer gender;
 
-	@Size(max = 32, message = "user.timezoneDigitLimit")
-	private String timezone;
+	private String avatar;
 
-	@Size(min = 2, max = 2, message = "user.locationDigitLimit")
-	private String location;
+	private List<UserLanguageVo> languages;
 
 }

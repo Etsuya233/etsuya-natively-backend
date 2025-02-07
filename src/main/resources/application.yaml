@@ -12,7 +12,6 @@ logging:
     com.ety.natively: info
 springdoc:
   swagger-ui:
-    path: /swagger-ui.html
     tags-sorter: alpha
     operations-sorter: alpha
   api-docs:
@@ -21,10 +20,6 @@ springdoc:
     - group: 'default'
       paths-to-match: '/**'
       packages-to-scan: com.ety.natively
-knife4j:
-  enable: true
-  setting:
-    language: zh_cn
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -32,6 +27,8 @@ mybatis-plus:
     db-config:
       id-type: assign_id
 natively:
+  elastic:
+    server-url: http://localhost:9200
   jwt:
     private-key-path: security/private.key
     public-key-path: security/public.key
@@ -49,11 +46,13 @@ natively:
       - /user/register
       - /user/username
       - /user/refresh
+      - /user/email
       - /general/location/**
       - /general/language/**
       - /user/oauth2/**
       - /test/**
       - /ws/**
-      - /chat/connect/**
+      - /websocket/connect/**
       - /language/lang/**
       - /language/explanation/stream
+      - /navi/stream/*/id

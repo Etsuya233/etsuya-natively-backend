@@ -21,9 +21,13 @@ public interface IPostServiceV2 extends IService<Post> {
 
 	List<PostPreview> getPostRecommendation(Long lastId);
 
+	List<PostPreview> getPostByFollowing(Long lastId);
+
+	List<PostPreview> getPostTrending(Integer rank);
+
 	VoteCompleteVo vote(VoteDto dto);
 
-	Long createComment(Long parentId, String content, MultipartFile image, MultipartFile voice, String compare);
+	Long createComment(Long postId, Long parentId, String content, MultipartFile image, MultipartFile voice, String compare);
 
 	List<CommentVoV2> getCommentList(Boolean post, Long id, Long lastId);
 
@@ -40,4 +44,6 @@ public interface IPostServiceV2 extends IService<Post> {
 	void createBookmark(BookmarkCreateDto dto);
 
 	void deleteBookmark(Long id);
+
+	List<PostPreview> getPostPreview(List<Post> posts);
 }

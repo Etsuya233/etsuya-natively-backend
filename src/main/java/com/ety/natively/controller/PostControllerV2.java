@@ -48,6 +48,19 @@ public class PostControllerV2 {
 		return R.ok(ret);
 	}
 
+	@GetMapping("/following")
+	public R<List<PostPreview>> getPostByFollowing(@RequestParam(value = "lastId", required = false) Long lastId){
+		List<PostPreview> ret = postService.getPostByFollowing(lastId);
+		return R.ok(ret);
+	}
+
+	// optimize this method
+	@GetMapping("/trending")
+	public R<List<PostPreview>> getPostTrending(@RequestParam(value = "rank", defaultValue = "1") Integer rank){
+		List<PostPreview> ret = postService.getPostTrending(rank);
+		return R.ok(ret);
+	}
+
 	@PostMapping("/vote")
 	public R<VoteCompleteVo> vote(@RequestBody VoteDto dto){
 		VoteCompleteVo ret = postService.vote(dto);
@@ -56,13 +69,13 @@ public class PostControllerV2 {
 
 	@PostMapping("/comment")
 	public R<Long> createComment(
-//			@RequestParam(value = "postId", required = false) Long postId,
+			@RequestParam(value = "postId", required = false) Long postId,
 			@RequestParam(value = "parentId", required = false) Long parentId,
 			@RequestParam("content") String content,
 			@RequestParam(value = "image", required = false) MultipartFile image,
 			@RequestParam(value = "voice", required = false) MultipartFile voice,
 			@RequestParam(value = "compare", required = false) String compare){
-		Long commentId = postService.createComment(parentId, content, image, voice, compare);
+		Long commentId = postService.createComment(postId, parentId, content, image, voice, compare);
 		return R.ok(commentId);
 	}
 

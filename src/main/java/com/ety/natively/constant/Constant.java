@@ -1,5 +1,13 @@
 package com.ety.natively.constant;
 
+import com.ety.natively.domain.vo.PostPreview;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 public interface Constant {
 	long ACCESS_TOKEN_TTL = 25 * 60 * 60;
 	long REFRESH_TOKEN_TTL = 3 * 24 * 60 * 60;
@@ -14,4 +22,10 @@ public interface Constant {
 
 	int BOOKMARK_CONTENT_LIMIT = 65500;
 	int BOOKMARK_NOTE_LIMIT = 1000;
+
+	// Trending
+	AtomicBoolean POST_TRENDING_RECORDING = new AtomicBoolean(false);
+	List<Long> POST_TRENDING_ID_LIST = new ArrayList<>();
+	Set<Long> POST_TRENDING_ID_SET = new HashSet<>();
+	List<PostPreview> POST_TRENDING_PREVIEW_LIST = new ArrayList<>();
 }

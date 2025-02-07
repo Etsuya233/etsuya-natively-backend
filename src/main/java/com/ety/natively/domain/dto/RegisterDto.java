@@ -37,9 +37,6 @@ public class RegisterDto {
 	@Size(max = 32, message = "user.timezoneDigitLimit")
 	private String timezone;
 
-	@Size(min = 2, max = 2, message = "user.locationDigitLimit")
-	private String location;
-
 	private List<LanguageSelection> language;
 
 	@Data

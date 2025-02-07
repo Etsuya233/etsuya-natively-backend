@@ -51,6 +51,8 @@ public class UserOauth implements Serializable {
 
     private String ownerId;
 
+    private String label;
+
     /**
      * 是否已完成注册流程
      */

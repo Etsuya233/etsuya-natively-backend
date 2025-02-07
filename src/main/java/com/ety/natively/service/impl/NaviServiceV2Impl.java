@@ -1,7 +1,10 @@
 package com.ety.natively.service.impl;
 
 import cn.hutool.json.JSONUtil;
-import com.ety.natively.domain.dto.NaviSpeakDto;
+import cn.hutool.system.RuntimeInfo;
+import com.ety.natively.domain.R;
+import com.ety.natively.domain.WebSocketPrincipal;
+import com.ety.natively.domain.navi.AskStreamDto;
 import com.ety.natively.domain.navi.*;
 import com.ety.natively.enums.ExceptionEnum;
 import com.ety.natively.exception.BaseException;
@@ -15,7 +18,6 @@ import com.microsoft.cognitiveservices.speech.SpeechSynthesisResult;
 import com.microsoft.cognitiveservices.speech.SpeechSynthesizer;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -24,10 +26,14 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import reactor.core.publisher.Flux;
 
 import java.io.ByteArrayInputStream;
+import java.security.Principal;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +46,8 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 
 	private final ChatClient chatClient;
 	private final AzureProperties azureProperties;
+	private final StringRedisTemplate redisTemplate;
+	private final SimpMessagingTemplate messagingTemplate;
 
 	private final String TRANSLATION_MANUAL_SYSTEM_MESSAGE = """
 			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
@@ -249,6 +257,109 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 				synthesizer.close();
 				speechConfig.close();
 			}
+		});
+	}
+
+	@Override
+	public void askStream(AskStreamDto dto, Principal principal) {
+		String question = dto.getQuestion();
+		String quote = dto.getQuote();
+		Long id = dto.getId();
+		if(!StringUtils.hasText(question)){
+			// done directly
+			sendEmptyStreamResponse(id, principal.getName());
+		}
+		if(quote == null){
+			quote = "";
+		}
+
+		String userContent = JSONUtil.toJsonStr(Map.of("question", question, "quote", quote));
+		Prompt prompt = ASK_SYSTEM_PROMPT_TEMPLATE.create(ASK_OPTIONS);
+		Flux<String> content = chatClient.prompt(prompt)
+				.user(userContent)
+				.stream()
+				.content();
+
+		// 使用MessagingTemplate返回数据
+		sendStreamData(id, principal.getName(), content);
+	}
+
+	@Override
+	public void explainStream(ExplainStreamDto dto, Principal principal) {
+		String quote = dto.getQuote();
+		Long id = dto.getId();
+		if(!StringUtils.hasText(quote)){
+			sendEmptyStreamResponse(id, principal.getName());
+		}
+
+		WebSocketPrincipal webSocketPrincipal = (WebSocketPrincipal) principal;
+		Locale language = webSocketPrincipal.getLanguage();
+		String languageName = language.getDisplayLanguage(Locale.CHINESE);
+		Prompt prompt = EXPLANATION_SYSTEM_PROMPT_TEMPLATE.create(Map.of("language", languageName), EXPLANATION_OPTIONS);
+
+		Flux<String> content = chatClient.prompt(prompt)
+				.user(quote)
+				.stream()
+				.content();
+
+		sendStreamData(id, principal.getName(), content);
+	}
+
+	private static final String TRANSLATION_SYSTEM_STREAM_PROMPT = """
+		你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
+		你能够像母语者一样讲世界上的各种语言。现在你需要将给出的原文翻译为 {language}。翻译时要准确传达原文的所有内容。
+		""";
+	private static final SystemPromptTemplate TRANSLATION_SYSTEM_STREAM_PROMPT_TEMPLATE = new SystemPromptTemplate(TRANSLATION_SYSTEM_STREAM_PROMPT);
+	private final ChatOptions TRANSLATION_STREAM_OPTIONS = OpenAiChatOptions.builder()
+			.temperature(1.3)
+			.build();
+
+	@Override
+	public void translateStream(TranslateStreamDto dto, Principal principal) {
+		// preparation
+		String targetLanguage = dto.getTargetLanguage();
+		if(targetLanguage == null || !I18NUtil.isSupportedLanguage(targetLanguage)) {
+			WebSocketPrincipal webSocketPrincipal = (WebSocketPrincipal) principal;
+			Locale language = webSocketPrincipal.getLanguage();
+			targetLanguage = language.getDisplayLanguage(Locale.CHINESE);
+		} else {
+			targetLanguage = Locale.of(targetLanguage).getDisplayLanguage(Locale.CHINESE);
+		}
+		// request
+		Prompt prompt = TRANSLATION_SYSTEM_STREAM_PROMPT_TEMPLATE.create(
+					Map.of("language", targetLanguage),
+					TRANSLATION_STREAM_OPTIONS);
+
+		Flux<String> content = chatClient.prompt(prompt)
+				.user(dto.getContent())
+				.stream()
+				.content();
+
+		sendStreamData(dto.getId(), principal.getName(), content);
+	}
+
+	private void sendEmptyStreamResponse(Long id, String userIdStr) {
+		StreamVo vo = new StreamVo();
+		vo.setId(id);
+		vo.setStatus("done");
+		messagingTemplate.convertAndSendToUser(userIdStr, "/queue/navi", R.ok(vo));
+	}
+
+	private void sendStreamData(Long id, String userIdStr, Flux<String> content) {
+		content.subscribe(message -> {
+			StreamVo vo = new StreamVo();
+			vo.setId(id);
+			vo.setStatus("message");
+			vo.setMessage(message);
+			messagingTemplate.convertAndSendToUser(userIdStr, "/queue/navi", R.ok(vo));
+		}, error -> {
+			StreamVo vo = new StreamVo();
+			vo.setId(id);
+			vo.setStatus("error");
+			vo.setMessage(error.getMessage());
+			messagingTemplate.convertAndSendToUser(userIdStr, "/queue/navi", R.ok(vo));
+		}, () -> {
+			sendEmptyStreamResponse(id, userIdStr);
 		});
 	}
 }

@@ -2,4 +2,20 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ety.natively.mapper.PostMapper">
 
+    <select id="getUserFollowingFeed" resultType="com.ety.natively.domain.po.Post">
+        SELECT *
+        FROM post p
+        WHERE (p.user_id IN (
+            SELECT followee_id
+            FROM user_relationship r
+            WHERE r.follower_id = #{userId}
+            AND r.status >= 1
+        ) OR p.user_id = #{userId})
+        <if test="lastId != null">
+            AND p.id &lt; #{lastId}
+        </if>
+        ORDER BY p.id DESC
+        LIMIT 8
+    </select>
+
 </mapper>

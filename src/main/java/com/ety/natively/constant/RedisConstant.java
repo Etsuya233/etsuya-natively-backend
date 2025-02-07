@@ -24,4 +24,8 @@ public interface RedisConstant {
 
 	String POST_VERIFICATION_CODE_PREFIX = "post:verification:";
 	Long POST_VERIFICATION_CODE_TTL = 10 * 60L; // 10 min
+
+	String POST_SCORE = "post:score";
+	String POST_TRENDING_ID_SET = "post:trending:id:set";
+	String POST_TRENDING_ID_LIST = "post:trending:id:list";
 }

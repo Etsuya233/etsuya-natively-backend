@@ -18,6 +18,9 @@ public enum ExceptionEnum {
 	USER_LOCATION_FAILED(2009, 200, "ex.userLocationFailed"),
 	USER_CANNOT_FOLLOW_WHEN_YOU_BLOCKED_SOMEONE(2010, 200, "user.cannotFollowWhenYouBlockedSomeone"),
 	USER_YOU_ARE_BLOCKED(2011, 200, "user.youAreBlocked"),
+	USER_OAUTH2_FAILED(2012, 200, "user.oauth2Failed"),
+	USER_AVATAR_UPLOAD_FAILED(2013, 200, "user.avatarUploadError"),
+	USER_UNSUPPORTED_LANGUAGE(3000, 200, "post.userUnsupportedLanguage"),
 
 	POST_TITLE_CANNOT_BE_EMPTY(3001, 200, "post.postTitleEmpty"),
 	POST_TITLE_RULE(3002, 200, "post.postTitleRule"),

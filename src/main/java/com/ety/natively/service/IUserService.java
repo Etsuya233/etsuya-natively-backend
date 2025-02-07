@@ -3,10 +3,8 @@ package com.ety.natively.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.User;
-import com.ety.natively.domain.vo.FollowVo;
-import com.ety.natively.domain.vo.LoginVo;
-import com.ety.natively.domain.vo.OAuth2LoginVo;
-import com.ety.natively.domain.vo.UserVo;
+import com.ety.natively.domain.vo.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -47,4 +45,16 @@ public interface IUserService extends IService<User> {
 	boolean checkIsContact(long senderId, long receiverId);
 
 	FollowVo follow(UserFollowDto dto);
+
+	List<UserLinkedAccountVo> getUserLinkedAccounts();
+
+	void oAuth2Unlink(OAuth2UnlinkDto request);
+
+	List<UserVo> getFollowing(Long userId, Long lastId);
+
+	List<UserVo> getFollowers(Long userId, Long lastId);
+
+	String uploadAvatar(MultipartFile avatar);
+
+//	OAuth2LoginVo oAuth2Link(OAuth2Request request);
 }

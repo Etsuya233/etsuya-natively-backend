@@ -2,4 +2,35 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ety.natively.mapper.UserRelationshipMapper">
 
+    <select id="getFollowings" resultType="com.ety.natively.domain.po.UserRelationship">
+        select * from user_relationship
+        where
+        <if test="lastId != null">
+            id &lt; (
+              select id
+              from user_relationship
+              where follower_id = #{userId}
+              and followee_id = #{lastId}
+              limit 1
+            ) and
+        </if>
+        follower_id = #{userId} and status >= 1
+        order by id desc limit 20
+    </select>
+
+    <select id="getFollowers" resultType="com.ety.natively.domain.po.UserRelationship">
+        select * from user_relationship
+        where
+        <if test="lastId != null">
+            id &lt; (
+            select id
+            from user_relationship
+            where followee_id = #{userId}
+            and follower_id = #{lastId}
+            limit 1
+            ) and
+        </if>
+        followee_id = #{userId} and status >= 1
+        order by id desc limit 20
+    </select>
 </mapper>
