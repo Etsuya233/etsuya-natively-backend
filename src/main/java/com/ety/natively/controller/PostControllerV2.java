@@ -68,15 +68,15 @@ public class PostControllerV2 {
 	}
 
 	@PostMapping("/comment")
-	public R<Long> createComment(
+	public R<CommentVoV2> createComment(
 			@RequestParam(value = "postId", required = false) Long postId,
 			@RequestParam(value = "parentId", required = false) Long parentId,
 			@RequestParam("content") String content,
 			@RequestParam(value = "image", required = false) MultipartFile image,
 			@RequestParam(value = "voice", required = false) MultipartFile voice,
 			@RequestParam(value = "compare", required = false) String compare){
-		Long commentId = postService.createComment(postId, parentId, content, image, voice, compare);
-		return R.ok(commentId);
+		CommentVoV2 vo = postService.createComment(postId, parentId, content, image, voice, compare);
+		return R.ok(vo);
 	}
 
 	@GetMapping("/comments")
@@ -124,4 +124,16 @@ public class PostControllerV2 {
 		return R.ok(ret);
 	}
 
+	@DeleteMapping
+	public R<Void> deletePost(@RequestBody DeleteDto dto){
+		postService.deletePost(dto);
+		return R.ok();
+	}
+
+	// mq ack
+	@DeleteMapping("/comment")
+	public R<Void> deleteComment(@RequestBody DeleteDto dto){
+		postService.deleteComment(dto);
+		return R.ok();
+	}
 }

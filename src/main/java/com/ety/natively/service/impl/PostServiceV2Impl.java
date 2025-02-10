@@ -17,7 +17,6 @@ import com.ety.natively.utils.I18NUtil;
 import com.ety.natively.utils.MinioUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.benmanes.caffeine.cache.stats.ConcurrentStatsCounter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.BeanUtils;
@@ -47,6 +46,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 	private final IPostLanguageService postLanguageService;
 	private final PostLanguageMapper postLanguageMapper;
 	private final IBookmarkService bookmarkService;
+	private final PostMapper postMapper;
 
 	@Override
 	public String getCreatePostVerificationCode() {
@@ -75,7 +75,6 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		return name;
 	}
 
-	// TODO hasMore
 	@Override
 	public Long createPost(PostCreationDto dto) {
 		// verification
@@ -94,7 +93,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		List<PostContentTemplate> content = dto.getContent();
 
 		// info limitation
-		if (type < 0 || type > 3) {
+		if (type < 0 || type > 2) {
 			throw new BaseException(ExceptionEnum.POST_TYPE_NOT_EXIST);
 		}
 		if (title != null && title.length() > Constant.POST_TITLE_LIMIT) {
@@ -102,7 +101,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		}
 
 		// type
-		if ((dto.getType().equals(PostType.QUESTION) || dto.getType().equals(PostType.ARTICLE)) && title == null) {
+		if (dto.getType().equals(PostType.QUESTION) && title == null) {
 			throw new BaseException(ExceptionEnum.POST_TITLE_CANNOT_BE_EMPTY);
 		}
 
@@ -119,7 +118,10 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		// content limitation and generate preview
 		long contentLength = 0, compareCount = 0, imageCount = 0, voiceCount = 0, markdownCount = 0;
 		boolean hasMore = false;
-		StringBuilder previewText = new StringBuilder();
+		StringBuilder previewText = new StringBuilder(), textContent = new StringBuilder();
+		if(title != null){
+			textContent.append(title).append("\n");
+		}
 		String previewImage = null, previewVoice = null;
 		List<String> attachments = new ArrayList<>();
 		if (content.size() > Constant.POST_BLOCK_LIMIT) {
@@ -140,6 +142,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 						}
 						previewText.append(textBlock.getValue(), 0, appendLength);
 						previewText.append('\n');
+						textContent.append(textBlock.getValue());
+						textContent.append('\n');
 					} else {
 						hasMore = true;
 					}
@@ -156,6 +160,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 					}
 					contentLength += compareBlock.getOldValue().length();
 					contentLength += compareBlock.getNewValue().length();
+					textContent.append("比较模块: \n\t原始值: ").append(compareBlock.getOldValue());
+					textContent.append("\n\t改进值: ").append(compareBlock.getNewValue()).append("\n");
 					if (previewText.length() < Constant.POST_PREVIEW_LIMIT) {
 						int appendLength = Math.min(Constant.POST_PREVIEW_LIMIT - previewText.length(), compareBlock.getOldValue().length());
 						if(appendLength < compareBlock.getOldValue().length()) {
@@ -182,7 +188,6 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 						throw new BaseException(ExceptionEnum.POST_VERIFICATION_FAILED);
 					}
 					attachments.add(imageBlock.getName());
-					// TODO path is dead
 					imageBlock.setName(minioUtils.generateFileUrl(MinioConstant.POST_ATTACHMENT_BUCKET, imageBlock.getName()));
 					if (previewImage == null) {
 						previewImage = imageBlock.getName();
@@ -210,6 +215,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 						markdownBlock.setValue("");
 					}
 					contentLength += markdownBlock.getValue().length();
+					textContent.append("Markdown 块: \n").append(markdownBlock.getValue()).append("\n");
 					if (previewText.length() < Constant.POST_PREVIEW_LIMIT) {
 						int appendLength = Math.min(Constant.POST_PREVIEW_LIMIT - previewText.length(), markdownBlock.getValue().length());
 						if(appendLength < markdownBlock.getValue().length()) {
@@ -269,40 +275,46 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		summary.setPostId(post.getId());
 		postSummaryService.save(summary);
 
+		// ai response
+		rabbitTemplate.convertAndSend(MqConstant.EXCHANGE.POST_TOPIC, MqConstant.KEY.POST_AI, new NaviReplyDto(post.getId(), textContent.toString()));
+
 		return post.getId();
 	}
 
 	@Override
 	public List<PostPreview> getPostRecommendation(Long lastId) {
 		// TODO refined recommendation algorithm
-		UserVo user = userService.getUserInfo(BaseContext.getUserId());
-		List<String> languages = user.getLanguages().stream().map(UserLanguageVo::getLanguage).toList();
-		List<PostLanguage> postLanguages = this.postLanguageService.lambdaQuery()
-				.lt(lastId != null, PostLanguage::getPostId, lastId)
-				.in(PostLanguage::getLang, languages)
-				.orderByDesc(PostLanguage::getPostId)
-				.last("limit 8")
-				.list();
-		List<Long> preIds = postLanguages.stream()
-				.map(PostLanguage::getPostId)
-				.distinct()
-				.toList();
-		if(preIds.isEmpty()) {
-			return new ArrayList<>();
-		}
-		Map<Long, Long> postLanguageCountFromUser = postLanguages.stream()
-				.collect(Collectors.groupingBy(PostLanguage::getPostId, Collectors.counting()));
-		List<PostLanguageCountDto> postLanguageCounts = postLanguageMapper.selectPostLanguageCountByIds(preIds);
-		List<Long> postIds = new ArrayList<>();
-		for (PostLanguageCountDto postLanguageCount : postLanguageCounts) {
-			Long postId = postLanguageCount.getPostId();
-			Long languageCount = postLanguageCount.getCount();
-			Long countByUser = postLanguageCountFromUser.get(postId);
-			if(countByUser == null || languageCount == null || countByUser < languageCount) {
-				continue;
-			}
-			postIds.add(postId);
-		}
+//		UserVo user = userService.getUserInfo(BaseContext.getUserId());
+//		List<String> languages = user.getLanguages().stream().map(UserLanguageVo::getLanguage).toList();
+//		List<PostLanguage> postLanguages = this.postLanguageService.lambdaQuery()
+//				.lt(lastId != null, PostLanguage::getPostId, lastId)
+//				.in(PostLanguage::getLang, languages)
+//				.orderByDesc(PostLanguage::getPostId)
+//				.last("limit 8")
+//				.list();
+//		List<Long> preIds = postLanguages.stream()
+//				.map(PostLanguage::getPostId)
+//				.distinct()
+//				.toList();
+//		if(preIds.isEmpty()) {
+//			return new ArrayList<>();
+//		}
+//		Map<Long, Long> postLanguageCountFromUser = postLanguages.stream()
+//				.collect(Collectors.groupingBy(PostLanguage::getPostId, Collectors.counting()));
+//		List<PostLanguageCountDto> postLanguageCounts = postLanguageMapper.selectPostLanguageCountByIds(preIds);
+//		List<Long> postIds = new ArrayList<>();
+//		for (PostLanguageCountDto postLanguageCount : postLanguageCounts) {
+//			Long postId = postLanguageCount.getPostId();
+//			Long languageCount = postLanguageCount.getCount();
+//			Long countByUser = postLanguageCountFromUser.get(postId);
+//			if(countByUser == null || languageCount == null || countByUser < languageCount) {
+//				continue;
+//			}
+//			postIds.add(postId);
+//		}
+
+		Long userId = BaseContext.getUserId();
+		List<Long> postIds = postMapper.getRecommendedPostId(userId, lastId);
 
 		List<Post> posts = this.lambdaQuery()
 				.in(Post::getId, postIds)
@@ -485,8 +497,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 
 	// TODO cascade counting (using mq), do it when we do system optimization
 	@Override
-	public Long createComment(Long postId, Long parentId, String content,
-							  MultipartFile image, MultipartFile voice, String compare) {
+	public CommentVoV2 createComment(Long postId, Long parentId, String content,
+									 MultipartFile image, MultipartFile voice, String compare) {
 		Long userId = BaseContext.getUserId();
 
 		Comment comment = new Comment();
@@ -533,6 +545,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				if (compareParsed.getNewValue() != null) {
 					contentLength += compareParsed.getNewValue().length();
 				}
+				comment.setCompare(compare);
 			}
 		} catch (Exception e) {
 			throw new BaseException(ExceptionEnum.POST_PARSE_FAILED);
@@ -552,7 +565,15 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		summary.setCommentId(comment.getId());
 		this.commentSummaryService.save(summary);
 
-		return comment.getId();
+		// comment count mq
+		rabbitTemplate.convertAndSend(MqConstant.EXCHANGE.POST_TOPIC, MqConstant.KEY.COMMENT_SCORE, parentId);
+
+		// return
+		Comment commentInDb = this.commentService.getById(comment.getId());
+		CommentVoV2 vo = new CommentVoV2();
+		BeanUtils.copyProperties(commentInDb, vo);
+
+		return vo;
 	}
 
 	@Override
@@ -592,11 +613,10 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		Map<Long, UserVo> userMap = users.stream().collect(Collectors.toMap(UserVo::getId, Function.identity()));
 
 		// pack
-		return comments.stream().sorted(Comment.sortByIdAsc).map(comment -> {
+		List<CommentVoV2> list = comments.stream().sorted(Comment.sortByIdAsc).map(comment -> {
 			CommentVoV2 vo = new CommentVoV2();
 			vo.setId(comment.getId());
 			vo.setParentId(id);
-//			vo.setPost(post);
 			vo.setCreateTime(comment.getCreateTime());
 			vo.setPostId(comment.getPostId());
 
@@ -606,7 +626,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			vo.setCompare(comment.getCompare());
 
 			UserVo user = userMap.get(comment.getUserId());
-			if(user != null){
+			if (user != null) {
 				vo.setUserId(user.getId());
 				vo.setNickname(user.getNickname());
 				vo.setUserLanguages(user.getLanguages());
@@ -614,7 +634,7 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			}
 
 			CommentSummary summary = summaryMap.get(comment.getId());
-			if(summary != null){
+			if (summary != null) {
 				vo.setUpvote(summary.getUpvoteCount());
 				vo.setDownvote(summary.getDownvoteCount());
 				vo.setCommentCount(summary.getCommentCount());
@@ -626,16 +646,25 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 			}
 
 			Vote vote = voteMap.get(comment.getId());
-			if(vote != null){
-				vo.setVote(vote.getType()? 1: -1);
+			if (vote != null) {
+				vo.setVote(vote.getType() ? 1 : -1);
 			} else {
 				vo.setVote(0);
 			}
 
 			return vo;
 		}).filter(comment -> comment.getUserId() != null).toList();
+
+		I18NUtil.adjustTimezone(list, "createTime");
+
+		return list;
 	}
 
+	/**
+	 * this will convert timezone.
+	 * @param id id
+	 * @return post
+	 */
 	@Override
 	public PostVo getPostById(Long id) {
 		// TODO Authentication
@@ -668,8 +697,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		vo.setType(post.getType());
 		vo.setTitle(post.getTitle());
 		vo.setContent(post.getContent());
-		vo.setCreateTime(post.getCreateTime());
 		vo.setPreviewImage(post.getPreviewImage());
+		vo.setCreateTime(I18NUtil.adjustTimezone(post.getCreateTime())); //timezone
 
 		vo.setNickname(user.getNickname());
 		vo.setAvatar(user.getAvatar());
@@ -682,6 +711,11 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		return vo;
 	}
 
+	/**
+	 * this will convert timezone.
+	 * @param id id
+	 * @return comments
+	 */
 	@Override
 	public CommentVoV2 getCommentById(Long id) {
 		// TODO authentication
@@ -713,9 +747,9 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		vo.setUserId(user.getId());
 		vo.setContent(comment.getContent());
 		vo.setParentId(comment.getParentId());
-		vo.setCreateTime(comment.getCreateTime());
 		vo.setImage(comment.getImage());
 		vo.setVoice(comment.getVoice());
+		vo.setCreateTime(I18NUtil.adjustTimezone(comment.getCreateTime()));
 
 		vo.setNickname(user.getNickname());
 		vo.setAvatar(user.getAvatar());
@@ -783,6 +817,11 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 		bookmarkService.removeById(id);
 	}
 
+	/**
+	 * this will convert timezone.
+	 * @param lastId lastId
+	 * @return bookmarks
+	 */
 	@Override
 	public List<BookmarkVo> getBookmark(Long lastId) {
 		Long userId = BaseContext.getUserId();
@@ -827,34 +866,34 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				.collect(Collectors.toMap(UserVo::getId, Function.identity()));
 
 		// pack
-		return bookmarks.stream().map(bookmark -> {
+		List<BookmarkVo> list = bookmarks.stream().map(bookmark -> {
 			BookmarkVo vo = new BookmarkVo();
 			BeanUtils.copyProperties(bookmark, vo);
 
 			Long referenceUserId = null;
-			if(bookmark.getType().equals(BookmarkType.POST)){
+			if (bookmark.getType().equals(BookmarkType.POST)) {
 				Long postId = bookmark.getReferenceId();
 				Post post = postMap.get(postId);
-				if(post == null){
+				if (post == null) {
 					return null;
 				}
 				referenceUserId = post.getUserId();
 				vo.setUserId(post.getUserId());
 				vo.setContent(post.getPreviewText());
 				vo.setContentHasMore(post.getPreviewHasMore());
-			} else if(bookmark.getType().equals(BookmarkType.COMMENT)){
+			} else if (bookmark.getType().equals(BookmarkType.COMMENT)) {
 				Long referenceId = bookmark.getReferenceId();
 				Comment comment = commentMap.get(referenceId);
-				if(comment == null){
+				if (comment == null) {
 					return null;
 				}
 				referenceUserId = comment.getUserId();
 				vo.setContent(comment.getContent());
 			}
 
-			if(!bookmark.getType().equals(BookmarkType.TEXT)){
+			if (!bookmark.getType().equals(BookmarkType.TEXT)) {
 				UserVo user = userMap.get(referenceUserId);
-				if(user == null){
+				if (user == null) {
 					return null;
 				}
 				vo.setUserId(user.getId());
@@ -865,8 +904,18 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 
 			return vo;
 		}).filter(Objects::nonNull).toList();
+
+		I18NUtil.adjustCreateTimeTimezone(list);
+
+		return list;
 	}
 
+	/**
+	 * this will convert timezone.
+	 * @param userId userId
+	 * @param lastId lastId
+	 * @return posts
+	 */
 	@Override
 	public List<PostPreview> getUserPost(Long userId, Long lastId) {
 		// todo validation
@@ -908,6 +957,11 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				.update();
 	}
 
+	/**
+	 * This will convert timezone.
+	 * @param posts post
+	 * @return posts' preview
+	 */
 	@Override
 	public List<PostPreview> getPostPreview(List<Post> posts) {
 		if (CollUtil.isEmpty(posts)) {
@@ -943,8 +997,8 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 				.collect(Collectors.toMap(Vote::getPostId, Function.identity()));
 
 		// pack
-		return posts.stream().sorted(Post.compareByIdDesc).map(post -> { // todo sort before map!!!
-			if(post == null){
+		List<PostPreview> list = posts.stream().sorted(Post.compareByIdDesc).map(post -> { // todo sort before map!!!
+			if (post == null) {
 				return null;
 			}
 
@@ -987,5 +1041,40 @@ public class PostServiceV2Impl extends ServiceImpl<PostMapper, Post> implements 
 
 			return preview;
 		}).filter(post -> post == null || post.getUserId() != null).toList();
+
+		I18NUtil.adjustTimezone(list, "createTime");
+
+		return list;
+	}
+
+	@Override
+	public void deletePost(DeleteDto dto) {
+		Long userId = BaseContext.getUserId();
+		Long postId = dto.getId();
+		Post post = this.getById(postId);
+		if(post == null){
+			throw new BaseException(ExceptionEnum.POST_NOT_EXIST);
+		} else if(!post.getUserId().equals(userId)){
+			throw new BaseException(ExceptionEnum.POST_NOT_YOURS);
+		}
+
+		this.removeById(postId);
+		rabbitTemplate.convertAndSend(MqConstant.EXCHANGE.POST_TOPIC, MqConstant.KEY.POST_DELETE, postId);
+	}
+
+	@Override
+	@Transactional
+	public void deleteComment(DeleteDto dto) {
+		Long userId = BaseContext.getUserId();
+		Long commentId = dto.getId();
+		Comment comment = this.commentService.getById(commentId);
+		if(comment == null){
+			throw new BaseException(ExceptionEnum.POST_COMMENT_NOT_EXIST);
+		} else if(!comment.getUserId().equals(userId)){
+			throw new BaseException(ExceptionEnum.POST_COMMENT_NOT_YOURS);
+		}
+
+		this.commentService.removeById(commentId);
+		rabbitTemplate.convertAndSend(MqConstant.EXCHANGE.POST_TOPIC, MqConstant.KEY.COMMENT_DELETE, commentId);
 	}
 }

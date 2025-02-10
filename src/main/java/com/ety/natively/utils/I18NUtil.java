@@ -184,6 +184,17 @@ public class I18NUtil {
 		return ret;
 	}
 
+	/**
+	 * 调整时区
+	 * @param time 时间
+	 * @return 转换后的时间
+	 */
+	public static LocalDateTime adjustTimezone(LocalDateTime time) {
+		ZoneId timeZone = BaseContext.getTimeZone();
+		if(timeZone == null) return time;
+		return time.atZone(ZoneOffset.UTC).withZoneSameInstant(timeZone).toLocalDateTime();
+	}
+
 	// -------- Split ---------
 
 }

@@ -425,14 +425,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
 	@Override
 	public boolean checkIsContact(long senderId, long receiverId) {
-		Long count = userRelationshipService.lambdaQuery()
+		UserRelationship relationship = this.userRelationshipService.lambdaQuery()
 				.eq(UserRelationship::getFollowerId, senderId)
 				.eq(UserRelationship::getFolloweeId, receiverId)
-				.count();
-		return count > 0;
+				.one();
+		return relationship != null && relationship.getStatus().equals(UserRelationshipStatus.MUTUAL_FOLLOWING);
 	}
 
-	//TODO 注意边界检查
 	@Override
 	@Transactional
 	public FollowVo follow(UserFollowDto dto) {
@@ -444,36 +443,37 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			throw new BaseException();
 		}
 
-		UserRelationship relationshipFollower = userRelationshipService.lambdaQuery()
+		UserRelationship followerRelationship = userRelationshipService.lambdaQuery()
 				.eq(UserRelationship::getFollowerId, userId)
 				.eq(UserRelationship::getFolloweeId, followeeId)
 				.one();
-		UserRelationship relationshipFollowee = userRelationshipService.lambdaQuery()
+		UserRelationship followeeRelationship = userRelationshipService.lambdaQuery()
 				.eq(UserRelationship::getFollowerId, followeeId)
 				.eq(UserRelationship::getFolloweeId, userId)
 				.one();
 
-		if (relationshipFollower != null && relationshipFollower.getStatus().equals(UserRelationshipStatus.BLOCKED)) {
-			throw new BaseException(ExceptionEnum.USER_CANNOT_FOLLOW_WHEN_YOU_BLOCKED_SOMEONE);
-		} else if (relationshipFollowee != null && relationshipFollowee.getStatus().equals(UserRelationshipStatus.BLOCKED)) {
-			throw new BaseException(ExceptionEnum.USER_YOU_ARE_BLOCKED);
-		}
+//		todo 暂时不检查被关注者被封禁
+//		if (followerRelationship != null && followerRelationship.getStatus().equals(UserRelationshipStatus.BLOCKED)) {
+//			throw new BaseException(ExceptionEnum.USER_CANNOT_FOLLOW_WHEN_YOU_BLOCKED_SOMEONE);
+//		} else if (followeeRelationship != null && followeeRelationship.getStatus().equals(UserRelationshipStatus.BLOCKED)) {
+//			throw new BaseException(ExceptionEnum.USER_YOU_ARE_BLOCKED);
+//		}
 
 		// 如果是关注操作
 		if (Boolean.TRUE.equals(follow)) {
 			// 当前用户没关注对方，现在关注
-			if (relationshipFollower == null) {
-				relationshipFollower = new UserRelationship();
-				relationshipFollower.setFollowerId(userId);
-				relationshipFollower.setFolloweeId(followeeId);
-				if (relationshipFollowee != null) {
-					relationshipFollower.setStatus(UserRelationshipStatus.MUTUAL_FOLLOWING);
-					relationshipFollowee.setStatus(UserRelationshipStatus.MUTUAL_FOLLOWING);
-					userRelationshipService.updateById(relationshipFollowee);
+			if (followerRelationship == null) {
+				followerRelationship = new UserRelationship();
+				followerRelationship.setFollowerId(userId);
+				followerRelationship.setFolloweeId(followeeId);
+				if (followeeRelationship != null) {
+					followerRelationship.setStatus(UserRelationshipStatus.MUTUAL_FOLLOWING);
+					followeeRelationship.setStatus(UserRelationshipStatus.MUTUAL_FOLLOWING);
+					userRelationshipService.updateById(followeeRelationship);
 				} else {
-					relationshipFollower.setStatus(UserRelationshipStatus.FOLLOWING);
+					followerRelationship.setStatus(UserRelationshipStatus.FOLLOWING);
 				}
-				userRelationshipService.save(relationshipFollower);
+				userRelationshipService.save(followerRelationship);
 				this.lambdaUpdate()
 						.eq(User::getId, userId)
 						.setIncrBy(User::getFollowing, 1)
@@ -483,19 +483,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 						.setIncrBy(User::getFollowers, 1)
 						.update();
 			}
-			if (relationshipFollowee != null) {
+			if (followeeRelationship != null) {
 				followVo.setRelationship(UserVo.RelationshipStatus.MUTUAL_FOLLOW);
 			} else {
 				followVo.setRelationship(UserVo.RelationshipStatus.ONE_WAY_FOLLOW);
 			}
 		} else { // 如果是取消关注操作
 			// 当前用户已经关注对方，现在取消关注
-			if (relationshipFollower != null) {
-				userRelationshipService.removeById(relationshipFollower.getId());
+			if (followerRelationship != null) {
+				userRelationshipService.removeById(followerRelationship.getId());
 				// 取消关注后，需要检查对方的状态
-				if (relationshipFollowee != null) {
-					relationshipFollowee.setStatus(UserRelationshipStatus.FOLLOWING);
-					userRelationshipService.updateById(relationshipFollowee);
+				if (followeeRelationship != null) {
+					followeeRelationship.setStatus(UserRelationshipStatus.FOLLOWING);
+					userRelationshipService.updateById(followeeRelationship);
 				}
 				this.lambdaUpdate()
 						.eq(User::getId, userId)
@@ -506,7 +506,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 						.setIncrBy(User::getFollowers, -1)
 						.update();
 			}
-			if (relationshipFollowee != null) {
+			if (followeeRelationship != null) {
 				followVo.setRelationship(UserVo.RelationshipStatus.ONE_WAY_FOLLOW_BY_OTHER);
 			} else {
 				followVo.setRelationship(UserVo.RelationshipStatus.NO_RELATION);

@@ -69,7 +69,7 @@ public class ChatMessageVo implements Serializable {
 		BeanUtils.copyProperties(chatMessage, chatMessageVo);
 		String formatted = dateTimeFormatter.format(chatMessage.getCreateTime());
 		chatMessageVo.setDate(formatted.substring(0, 10));
-		chatMessageVo.setTime(formatted.substring(11, 18));
+		chatMessageVo.setTime(formatted.substring(11, 19));
 		return chatMessageVo;
 	}
 

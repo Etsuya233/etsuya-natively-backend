@@ -57,6 +57,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 		// 下面一行指明了所有@MessageMapping的前缀，不管@MessageMapping所在Controller的前缀！
 		registry.setApplicationDestinationPrefixes("/ws");
 		registry.setUserDestinationPrefix("/user");
+		registry.setPreservePublishOrder(true);
 
 		// 下面是使用简单的基于内存的SimpleBroker
 		// 启用了一个简单的基于内存的Broker。（以后可以换成更高级的MQ！）

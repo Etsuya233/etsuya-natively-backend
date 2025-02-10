@@ -21,6 +21,7 @@ public enum ExceptionEnum {
 	USER_OAUTH2_FAILED(2012, 200, "user.oauth2Failed"),
 	USER_AVATAR_UPLOAD_FAILED(2013, 200, "user.avatarUploadError"),
 	USER_UNSUPPORTED_LANGUAGE(3000, 200, "post.userUnsupportedLanguage"),
+	POST_COMMENT_NOT_YOURS(3000, 200, "post.commentNotYours"),
 
 	POST_TITLE_CANNOT_BE_EMPTY(3001, 200, "post.postTitleEmpty"),
 	POST_TITLE_RULE(3002, 200, "post.postTitleRule"),
@@ -43,6 +44,7 @@ public enum ExceptionEnum {
 	POST_BOOKMARK_CONTENT_LIMIT(3019, 200, "post.bookmarkContentLimit"),
 	POST_BOOKMARK_NOTE_LIMIT(3020, 200, "post.bookmarkNoteLimit"),
 	POST_BOOKMARK_NOT_EXIST(3021, 200, "post.bookmarkNotExist"),
+	POST_NOT_YOURS(3022, 200, "post.notYours"),
 
 	CHAT_NOT_CONTACT(4001, 200, "chat.notContact"),
 

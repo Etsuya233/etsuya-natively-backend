@@ -9,7 +9,6 @@ import java.util.List;
 public class CommentVoV2 {
 	private Long id;
 	private Long parentId;
-//	private Boolean post;
 	private Long postId;
 
 	private String nickname;
@@ -19,7 +18,7 @@ public class CommentVoV2 {
 
 	private Long upvote = 0L;
 	private Long downvote = 0L;
-	private Integer vote;
+	private Integer vote = 0;
 	private Long commentCount = 0L;
 
 	private String content;

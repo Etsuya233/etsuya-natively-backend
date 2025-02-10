@@ -18,4 +18,23 @@
         LIMIT 8
     </select>
 
+    <select id="getRecommendedPostId" resultType="java.lang.Long">
+        WITH langs AS (
+            SELECT lang
+            FROM user_language
+            WHERE user_id = #{userId}
+        )
+        SELECT DISTINCT post_id
+        FROM post_language pl1
+        WHERE <if test="lastId != null">post_id &lt; #{lastId} AND</if>
+            lang IN (SELECT lang FROM langs)
+            AND NOT EXISTS (
+        SELECT *
+        FROM post_language pl2
+        WHERE pl2.post_id = pl1.post_id
+            AND pl2.lang not in (SELECT lang FROM langs))
+        ORDER BY post_id DESC
+        LIMIT 8;
+    </select>
+
 </mapper>

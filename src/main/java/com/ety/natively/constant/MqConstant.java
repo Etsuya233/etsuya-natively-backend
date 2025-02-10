@@ -2,11 +2,20 @@ package com.ety.natively.constant;
 
 public interface MqConstant {
 	interface EXCHANGE {
-		String AI_TOPIC = "ai.topic";
+		String POST_TOPIC = "post.topic";
 	}
 
 	interface KEY {
-		String AI_CONVERSATION_DELETE = "conversation.delete";
-		String AI_CONVERSATION_PERSISTENCE = "conversation.persistence";
+		String POST_DELETE = "post.delete";
+		String COMMENT_DELETE = "comment.delete";
+		String COMMENT_SCORE = "comment.score";
+		String POST_AI = "post.ai";
+	}
+
+	interface QUEUE {
+		String POST_DELETE = "post.delete";
+		String COMMENT_DELETE = "comment.delete";
+		String COMMENT_SCORE = "comment.score";
+		String POST_AI = "post.ai";
 	}
 }

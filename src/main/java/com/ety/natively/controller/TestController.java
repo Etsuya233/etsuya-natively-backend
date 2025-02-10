@@ -1,6 +1,8 @@
 package com.ety.natively.controller;
 
 import cn.hutool.json.JSONUtil;
+import com.ety.natively.domain.dto.NaviReplyDto;
+import com.ety.natively.listener.PostListener;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Configuration;
@@ -64,6 +66,13 @@ public class TestController {
 						.data("Error: " + e.getMessage())
 						.build()
 		);
+	}
+
+	private final PostListener postListener;
+
+	@PostMapping("/postAi")
+	public void test(@RequestBody NaviReplyDto naviReplyDto){
+		postListener.postReply(naviReplyDto);
 	}
 
 }

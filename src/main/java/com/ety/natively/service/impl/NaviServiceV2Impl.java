@@ -1,7 +1,6 @@
 package com.ety.natively.service.impl;
 
 import cn.hutool.json.JSONUtil;
-import cn.hutool.system.RuntimeInfo;
 import com.ety.natively.domain.R;
 import com.ety.natively.domain.WebSocketPrincipal;
 import com.ety.natively.domain.navi.AskStreamDto;
@@ -80,8 +79,6 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 	private final String TRANSLATION_MANUAL_JSON_OBJECT = """ 
 			{ "first_translation": "首次翻译", "final_translation": "最终翻译", "translate_from": "原文语言" }
 			""";
-	private final SystemPromptTemplate TRANSLATION_SYSTEM_AUTO_DETECTION_PROMPT_TEMPLATE = new SystemPromptTemplate(TRANSLATION_AUTO_DETECTION_SYSTEM_MESSAGE);
-	private final SystemPromptTemplate TRANSLATION_SYSTEM_MANUAL_PROMPT_TEMPLATE = new SystemPromptTemplate(TRANSLATION_MANUAL_SYSTEM_MESSAGE);
 	private final ChatOptions TRANSLATION_OPTIONS = OpenAiChatOptions.builder()
 			.temperature(1.3)
 			.responseFormat(ResponseFormat.builder().type(ResponseFormat.Type.JSON_OBJECT).build())
@@ -100,21 +97,30 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		if(targetLanguage == null || !I18NUtil.isSupportedLanguage(targetLanguage)) {
 			targetLanguage = BaseContext.getLanguage().getDisplayLanguage(Locale.CHINESE);
 		}
+		final String originalLanguageFinal = originalLanguage;
+		final String targetLanguageFinal = targetLanguage;
 		// request
-		Prompt prompt;
+		TranslationResponse response;
 		if(originalLanguage == null){
-			prompt = TRANSLATION_SYSTEM_AUTO_DETECTION_PROMPT_TEMPLATE.create(
-					Map.of("language", targetLanguage, "format", TRANSLATION_AUTO_DETECTION_JSON_OBJECT),
-					TRANSLATION_OPTIONS);
+			response = chatClient.prompt()
+					.system(s -> s
+							.text(TRANSLATION_AUTO_DETECTION_SYSTEM_MESSAGE)
+							.param("format", TRANSLATION_AUTO_DETECTION_JSON_OBJECT).param("language", targetLanguageFinal))
+					.user(dto.getContent())
+					.options(TRANSLATION_OPTIONS)
+					.call()
+					.entity(TranslationResponse.class);
 		} else {
-			prompt = TRANSLATION_SYSTEM_MANUAL_PROMPT_TEMPLATE.create(
-					Map.of("language", targetLanguage, "format", TRANSLATION_MANUAL_JSON_OBJECT, "original", originalLanguage),
-					TRANSLATION_OPTIONS);
+			response = chatClient.prompt()
+					.system(s -> s
+							.text(TRANSLATION_MANUAL_SYSTEM_MESSAGE)
+							.params(Map.of("language", targetLanguageFinal, "format", TRANSLATION_MANUAL_JSON_OBJECT, "original", originalLanguageFinal)))
+					.user(dto.getContent())
+					.options(TRANSLATION_OPTIONS)
+					.call()
+					.entity(TranslationResponse.class);
 		}
-		TranslationResponse response = chatClient.prompt(prompt)
-				.user(dto.getContent())
-				.call()
-				.entity(TranslationResponse.class);
+
 
 		// todo validation like response language code
 		if(response == null) {
@@ -141,7 +147,6 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		    
 		    请根据输入提供答案。
 			""";
-	private final SystemPromptTemplate ASK_SYSTEM_PROMPT_TEMPLATE = new SystemPromptTemplate(ASK_SYSTEM_MESSAGE);
 	private final ChatOptions ASK_OPTIONS = OpenAiChatOptions.builder()
 			.temperature(1.3)
 			.build();
@@ -149,25 +154,23 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 	@Override
 	public AskVo ask(AskDto dto) {
 		String question = dto.getQuestion();
-		String quote = dto.getQuote();
+		String quote = dto.getQuote() == null ? "" : dto.getQuote();
 		if(!StringUtils.hasText(question)){
 			return new AskVo("");
 		}
-		if(quote == null){
-			quote = "";
-		}
 
 		String userContent = JSONUtil.toJsonStr(Map.of("question", question, "quote", quote));
-		Prompt prompt = ASK_SYSTEM_PROMPT_TEMPLATE.create(ASK_OPTIONS);
-		String answer = chatClient.prompt(prompt)
+		String answer = chatClient.prompt()
+				.system(s -> s.text(ASK_SYSTEM_MESSAGE))
 				.user(userContent)
+				.options(ASK_OPTIONS)
 				.call()
 				.content();
 
 		return new AskVo(answer);
 	}
 
-	private final String EXPLANATION_SYSTEM_LANGUAGE = """
+	private final String EXPLANATION_SYSTEM_MESSAGE = """
 			你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
 			你现在面对的是一个学习某门外语的学生，该学生可能看不太懂这段话。现在请你用 {language} 解释我给出的内容。主要聚焦于语言学习上。
 		   	规则：
@@ -176,7 +179,6 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		   	3，不要使用代码块。
 		   	你需要返回Markdown格式的内容。不要返回代码块。
 			""";
-	private final SystemPromptTemplate EXPLANATION_SYSTEM_PROMPT_TEMPLATE = new SystemPromptTemplate(EXPLANATION_SYSTEM_LANGUAGE);
 	private final ChatOptions EXPLANATION_OPTIONS = OpenAiChatOptions.builder()
 			.temperature(1.0)
 			.build();
@@ -190,10 +192,13 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 
 		Locale language = BaseContext.getLanguage();
 		String languageName = language.getDisplayLanguage(Locale.CHINESE);
-		Prompt prompt = EXPLANATION_SYSTEM_PROMPT_TEMPLATE.create(Map.of("language", languageName), EXPLANATION_OPTIONS);
 
-		String answer = chatClient.prompt(prompt)
+		String answer = chatClient.prompt()
+				.system(s -> s
+						.text(EXPLANATION_SYSTEM_MESSAGE)
+						.params(Map.of("language", languageName)))
 				.user(quote)
+				.options(EXPLANATION_OPTIONS)
 				.call()
 				.content();
 
@@ -274,9 +279,10 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		}
 
 		String userContent = JSONUtil.toJsonStr(Map.of("question", question, "quote", quote));
-		Prompt prompt = ASK_SYSTEM_PROMPT_TEMPLATE.create(ASK_OPTIONS);
-		Flux<String> content = chatClient.prompt(prompt)
+		Flux<String> content = chatClient.prompt()
+				.system(s -> s.text(ASK_SYSTEM_MESSAGE))
 				.user(userContent)
+				.options(ASK_OPTIONS)
 				.stream()
 				.content();
 
@@ -295,10 +301,13 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		WebSocketPrincipal webSocketPrincipal = (WebSocketPrincipal) principal;
 		Locale language = webSocketPrincipal.getLanguage();
 		String languageName = language.getDisplayLanguage(Locale.CHINESE);
-		Prompt prompt = EXPLANATION_SYSTEM_PROMPT_TEMPLATE.create(Map.of("language", languageName), EXPLANATION_OPTIONS);
 
-		Flux<String> content = chatClient.prompt(prompt)
+		Flux<String> content = chatClient.prompt()
+				.system(s -> s
+						.text(EXPLANATION_SYSTEM_MESSAGE)
+						.params(Map.of("language", languageName)))
 				.user(quote)
+				.options(EXPLANATION_OPTIONS)
 				.stream()
 				.content();
 
@@ -309,7 +318,6 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		你是一位精通世界各国语言的语言学习助手Navi，由Natively开发。Natively是一款语言学习交流平台。
 		你能够像母语者一样讲世界上的各种语言。现在你需要将给出的原文翻译为 {language}。翻译时要准确传达原文的所有内容。
 		""";
-	private static final SystemPromptTemplate TRANSLATION_SYSTEM_STREAM_PROMPT_TEMPLATE = new SystemPromptTemplate(TRANSLATION_SYSTEM_STREAM_PROMPT);
 	private final ChatOptions TRANSLATION_STREAM_OPTIONS = OpenAiChatOptions.builder()
 			.temperature(1.3)
 			.build();
@@ -325,13 +333,15 @@ public class NaviServiceV2Impl implements NaviServiceV2 {
 		} else {
 			targetLanguage = Locale.of(targetLanguage).getDisplayLanguage(Locale.CHINESE);
 		}
-		// request
-		Prompt prompt = TRANSLATION_SYSTEM_STREAM_PROMPT_TEMPLATE.create(
-					Map.of("language", targetLanguage),
-					TRANSLATION_STREAM_OPTIONS);
+		final String targetLanguageFinal = targetLanguage;
 
-		Flux<String> content = chatClient.prompt(prompt)
+		// request
+		Flux<String> content = chatClient.prompt()
+				.system(s -> s
+						.text(TRANSLATION_SYSTEM_STREAM_PROMPT)
+						.params(Map.of("language", targetLanguageFinal)))
 				.user(dto.getContent())
+				.options(TRANSLATION_STREAM_OPTIONS)
 				.stream()
 				.content();
 
