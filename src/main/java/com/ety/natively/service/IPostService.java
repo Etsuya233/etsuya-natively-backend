@@ -1,49 +1,54 @@
 package com.ety.natively.service;
 
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.ety.natively.domain.dto.*;
 import com.ety.natively.domain.po.Post;
-import com.baomidou.mybatisplus.extension.service.IService;
-import com.ety.natively.domain.vo.BookmarkVo;
-import com.ety.natively.domain.vo.CommentVo;
-import com.ety.natively.domain.vo.PostInfoVo;
-import com.ety.natively.domain.vo.PostVo;
+import com.ety.natively.domain.vo.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/**
- * <p>
- *  服务类
- * </p>
- *
- * @author Etsuya
- * @since 2024-11-10
- */
 public interface IPostService extends IService<Post> {
 
-	Long createPost(PostDto dto);
+	String getCreatePostVerificationCode();
 
-	List<PostInfoVo> getRecommendation(Long lastId);
+	String uploadPostAttachment(MultipartFile file, String verificationCode);
 
-	PostVo getPost(Long id);
+	Long createPost(PostCreationDto dto);
 
-	List<CommentVo> getPostComment(Long id, Long lastId);
+	List<PostPreview> getPostRecommendation(Long lastId);
 
-	CommentVo addComment(CommentDto dto);
+	List<PostPreview> getPostByFollowing(Long lastId);
 
-	CommentVo addCommentNew(Long postId, Long parentId, String content, MultipartFile[] images, MultipartFile voice);
+	List<PostPreview> getPostTrending(Integer rank);
 
-	Long createPostNew(String postId, String content, Integer type, MultipartFile[] images, MultipartFile voice);
+	VoteCompleteVo vote(VoteDto dto);
 
-	boolean vote(VoteDto dto);
+	CommentVo createComment(Long postId, Long parentId, String content, MultipartFile image, MultipartFile voice, String compare);
 
-	List<PostInfoVo> getUserPosts(Long userId, Long lastId);
+	List<CommentVo> getCommentList(Boolean post, Long id, Long lastId, Integer sort);
 
-//	void createBookmark(BookmarkCreateDto dto);
+	PostVo getPostById(Long id);
 
-//	Boolean bookmark(BookmarkNewDto dto);
-//
-//	List<BookmarkVo> getBookmarks(Long lastId);
-//
-//	Boolean removeBookmark(BookmarkNewDto dto);
+	CommentVo getCommentById(Long id);
+
+	List<BookmarkVo> getBookmark(Long lastId);
+
+	List<PostPreview> getUserPost(Long userId, Long lastId);
+
+	void updateBookmark(BookmarkUpdateDto dto);
+
+	void createBookmark(BookmarkCreateDto dto);
+
+	void deleteBookmark(Long id);
+
+	List<PostPreview> getPostPreview(List<Post> posts);
+
+	void deletePost(DeleteDto dto);
+
+	void deleteComment(DeleteDto dto);
+
+	CommentParentChain getParentCommentCascade(Long id);
+
+	List<CommentVo> getCommentListByHot(Long id, Long count);
 }

@@ -7,6 +7,7 @@ import java.io.Serial;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 
 import lombok.Data;
@@ -51,11 +52,6 @@ public class Post implements Serializable {
      */
     private String content;
 
-    /**
-     * 类型，普通1，问答2
-     */
-    private Integer type;
-
     private String previewText;
     private String previewImage;
     private String previewVoice;
@@ -74,4 +70,16 @@ public class Post implements Serializable {
 
     public static Comparator<Post> compareByIdDesc = (o1, o2) -> o2.getId().compareTo(o1.getId());
 
+    public static final Post EMPTY = new Post();
+
+    static {
+        EMPTY.setId(0L);
+        EMPTY.setUserId(0L);
+        EMPTY.setTitle("(Deleted)");
+        EMPTY.setContent("(Deleted)");
+        EMPTY.setPreviewText("(Deleted)");
+        EMPTY.setCreateTime(LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC));
+        EMPTY.setPreviewHasMore(false);
+
+    }
 }

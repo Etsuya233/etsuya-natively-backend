@@ -1,6 +1,7 @@
 package com.ety.natively.utils;
 
 import cn.hutool.core.collection.CollUtil;
+import com.ety.natively.domain.dto.PostLanguageCountDto;
 import com.ety.natively.domain.po.Language;
 import com.ety.natively.domain.po.Location;
 import com.github.pemistahl.lingua.api.LanguageDetector;
@@ -48,31 +49,7 @@ public class I18NUtil {
 	}
 
 	public static boolean isSupportedLanguage(String testLanguage) {
-		for (Locale language : languages) {
-			if(language.getLanguage().equals(testLanguage)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-
-	/**
-	 * 系统自持的地区 TODO 准备Deprecated
-	 */
-	public static final List<Location> enLocations = new ArrayList<>(), zhCnLocations = new ArrayList<>(),
-			jaLocations = new ArrayList<>(), frLocations = new ArrayList<>(),
-			koLocations = new ArrayList<>();
-
-	static {
-		for (String locationCode : Locale.getISOCountries()) {
-			Locale locale = Locale.of("", locationCode);
-			enLocations.add(new Location(locale.getDisplayName(Locale.ENGLISH), locationCode));
-			zhCnLocations.add(new Location(locale.getDisplayName(Locale.CHINA), locationCode));
-			jaLocations.add(new Location(locale.getDisplayName(Locale.JAPAN), locationCode));
-			frLocations.add(new Location(locale.getDisplayName(Locale.FRANCE), locationCode));
-			koLocations.add(new Location(locale.getDisplayName(Locale.KOREAN), locationCode));
-		}
+		return languageCodes.contains(testLanguage);
 	}
 
 	// -------- Time ---------

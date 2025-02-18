@@ -34,7 +34,7 @@
         WHERE pl2.post_id = pl1.post_id
             AND pl2.lang not in (SELECT lang FROM langs))
         ORDER BY post_id DESC
-        LIMIT 8;
+        LIMIT 12;
     </select>
 
 </mapper>

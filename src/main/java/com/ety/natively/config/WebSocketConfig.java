@@ -59,16 +59,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 		registry.setUserDestinationPrefix("/user");
 		registry.setPreservePublishOrder(true);
 
-		// 下面是使用简单的基于内存的SimpleBroker
-		// 启用了一个简单的基于内存的Broker。（以后可以换成更高级的MQ！）
+//		 下面是使用简单的基于内存的SimpleBroker todo make a constant that change dynamically
+//		 启用了一个简单的基于内存的Broker。（以后可以换成更高级的MQ！）
 		registry.enableSimpleBroker("/topic", "/queue");
 
 		// 下面是使用外置的RabbitMQ
-//		registry.enableStompBrokerRelay("/exchange", "/topic", "/queue", "/amq/queue")
-//				.setVirtualHost("/natively")
+//		registry.enableStompBrokerRelay("/exchange", "/topic", "/queue", "/amq/queue", "/exchange")
+//				.setVirtualHost("/natively-chat")
 //				.setRelayHost("localhost")
 //				.setRelayPort(61613)
-//				.setClientLogin("natively")
+//				.setClientLogin("chat-user")
 //				.setClientPasscode("ety2004")
 //				.setSystemLogin("natively")
 //				.setSystemPasscode("ety2004");

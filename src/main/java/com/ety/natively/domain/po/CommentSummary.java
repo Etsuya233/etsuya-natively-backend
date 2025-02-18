@@ -29,7 +29,7 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor
 public class CommentSummary implements Serializable, VoteSummary {
 
-    @Serial
+	@Serial
     private static final long serialVersionUID = 1L;
 
     /**
@@ -53,5 +53,14 @@ public class CommentSummary implements Serializable, VoteSummary {
      */
     private Long commentCount;
 
+
+    public static final CommentSummary EMPTY = new CommentSummary();
+
+    static {
+        EMPTY.setCommentId(0L);
+        EMPTY.setUpvoteCount(0L);
+        EMPTY.setDownvoteCount(0L);
+        EMPTY.setCommentCount(0L);
+    }
 
 }

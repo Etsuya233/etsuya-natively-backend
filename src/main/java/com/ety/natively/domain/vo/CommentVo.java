@@ -8,22 +8,23 @@ import java.util.List;
 @Data
 public class CommentVo {
 	private Long id;
-	private String content;
+	private Long parentId;
+	private Long postId;
+
 	private String nickname;
 	private Long userId;
 	private List<UserLanguageVo> userLanguages;
-	private Long parentId;
-	private Long parentUserId;
-	private String parentUserNickname;
-	private String parentContent;
-	private Boolean parentHasMore;
 	private String avatar;
-	private LocalDateTime createTime;
+
 	private Long upvote = 0L;
 	private Long downvote = 0L;
-	private Integer vote;
+	private Integer vote = 0;
 	private Long commentCount = 0L;
-	private Integer bookmarked;
-	private List<AttachmentVo> images;
-	private AttachmentVo voice;
+
+	private String content;
+	private String image;
+	private String voice;
+	private String compare;
+
+	private LocalDateTime createTime;
 }

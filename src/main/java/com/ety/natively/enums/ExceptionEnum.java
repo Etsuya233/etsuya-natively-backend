@@ -20,9 +20,9 @@ public enum ExceptionEnum {
 	USER_YOU_ARE_BLOCKED(2011, 200, "user.youAreBlocked"),
 	USER_OAUTH2_FAILED(2012, 200, "user.oauth2Failed"),
 	USER_AVATAR_UPLOAD_FAILED(2013, 200, "user.avatarUploadError"),
-	USER_UNSUPPORTED_LANGUAGE(3000, 200, "post.userUnsupportedLanguage"),
-	POST_COMMENT_NOT_YOURS(3000, 200, "post.commentNotYours"),
+	USER_PASSWORD_FORMAT_NOT_MATCH(2014, 200, "user.passwordFormatNotMatch"),
 
+	POST_COMMENT_NOT_YOURS(3000, 200, "post.commentNotYours"),
 	POST_TITLE_CANNOT_BE_EMPTY(3001, 200, "post.postTitleEmpty"),
 	POST_TITLE_RULE(3002, 200, "post.postTitleRule"),
 	POST_NOT_EXIST(3003, 200, "post.notExist"),
@@ -31,8 +31,8 @@ public enum ExceptionEnum {
 	POST_VERIFICATION_FAILED(3006, 200, "post.verificationFailed"),
 	POST_BLOCK_OVER_LIMIT(3007, 200, "post.blockOverLimit"),
 	POST_CONTENT_OVER_LIMIT(3008, 200, "post.contentOverLimit"),
-	POST_IMAGE_OVER_LIMIT(3009, 200, "post.imageOverLimit"),
-	POST_VOICE_OVER_LIMIT(3010, 200, "post.voiceOverLimit"),
+	POST_IMAGE_OVER_COUNT_LIMIT(3009, 200, "post.imageOverCountLimit"),
+	POST_VOICE_OVER_COUNT_LIMIT(3010, 200, "post.voiceOverCountLimit"),
 	POST_TYPE_NOT_EXIST(3011, 200, "post.typeNotExist"),
 	POST_TITLE_TOO_LONG(3012, 200, "post.titleTooLong"),
 	POST_CANNOT_REPEAT_VOTE(3013, 200, "post.cannotRepeatVote"),
@@ -45,10 +45,17 @@ public enum ExceptionEnum {
 	POST_BOOKMARK_NOTE_LIMIT(3020, 200, "post.bookmarkNoteLimit"),
 	POST_BOOKMARK_NOT_EXIST(3021, 200, "post.bookmarkNotExist"),
 	POST_NOT_YOURS(3022, 200, "post.notYours"),
+	POST_ATTACHMENT_UNSUPPORTED_TYPE(3023, 200, "post.attachmentUnsupportedType"),
+	POST_IMAGE_OVER_SIZE_LIMIT(3024, 200, "post.imageOverSizeLimit"),
+	POST_VOICE_OVER_SIZE_LIMIT(3025, 200, "post.voiceOverSizeLimit"),
+	USER_UNSUPPORTED_LANGUAGE(3026, 200, "post.userUnsupportedLanguage"),
 
 	CHAT_NOT_CONTACT(4001, 200, "chat.notContact"),
+	CHAT_ONLY_ONE_MESSAGE_IN_A_WEEK_WHEN_NOT_CONTACT(4002, 200, "chat.onlyOneMessageInAWeekWhenNotContact"),
 
-	NAVI_SERVER_ERROR(5001, 200, "navi.serverError");
+	NAVI_SERVER_ERROR(5001, 200, "navi.serverError"),
+
+	SEARCH_NOT_SUPPORTED_LANGUAGE(6001, 200, "search.notSupportedLanguage");
 
 	final int errorCode;
 	final int httpCode;

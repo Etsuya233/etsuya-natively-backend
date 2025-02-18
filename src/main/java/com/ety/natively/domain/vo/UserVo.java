@@ -4,7 +4,6 @@ import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.po.UserLanguage;
 import lombok.Data;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -30,6 +29,9 @@ public class UserVo {
 	 * 性别 0 女 1 男 2 其他
 	 */
 	private Integer gender;
+
+
+	private String bio;
 
 	/**
 	 * IANA时区
@@ -69,6 +71,7 @@ public class UserVo {
 		userVo.setStatus(user.getStatus());
 		userVo.setFollowing(user.getFollowing());
 		userVo.setFollowers(user.getFollowers());
+		userVo.setBio(user.getBio());
 		ArrayList<UserLanguageVo> langs = new ArrayList<>();
 		userVo.setLanguages(langs);
 		if(userLanguages != null) {
@@ -116,5 +119,13 @@ public class UserVo {
 		int MUTUAL_FOLLOW = 3;
 	}
 
+	public final static UserVo EMPTY = new UserVo();
+
+	static {
+		EMPTY.setId(0L);
+		EMPTY.setNickname("(Deleted)");
+		EMPTY.setUsername("deleted");
+		EMPTY.setAvatar("/data/natively-avatar/deleted.jpg");
+	}
 
 }

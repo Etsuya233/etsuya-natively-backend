@@ -12,9 +12,9 @@ public class PostVo {
 	private String title;
 	private String content;
 	private String previewImage;
+	private List<String> languages;
 
 	private Long userId;
-	private Integer type;
 	private String nickname;
 	private String avatar;
 	private List<UserLanguageVo> userLanguages;
@@ -27,9 +27,4 @@ public class PostVo {
 	private Integer bookmarked;
 
 	private LocalDateTime createTime;
-
-	@Deprecated
-	private List<AttachmentVo> images;
-	@Deprecated
-	private AttachmentVo voice;
 }

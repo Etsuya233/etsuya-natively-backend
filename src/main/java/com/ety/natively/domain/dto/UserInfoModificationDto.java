@@ -28,4 +28,7 @@ public class UserInfoModificationDto {
 
 	private List<UserLanguageVo> languages;
 
+	@Size(max = 768, message = "user.bioDigitLimit")
+	private String bio;
+
 }

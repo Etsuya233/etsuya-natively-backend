@@ -15,6 +15,7 @@ public class BookmarkVo {
 	private List<UserLanguageVo> userLanguages;
 	private String nickname;
 	private String avatar;
+	private List<String> languages;
 	private String note;
 	private String content;
 	private LocalDateTime createTime;

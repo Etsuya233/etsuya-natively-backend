@@ -33,7 +33,7 @@ public class WebSocketExceptionHandler {
 		ExceptionEnum exceptionEnum = e.getExceptionEnum();
 		String destination = e.getDestination();
 		if(destination == null){
-			destination = "/queue/system";
+			destination = StompConstant.USER_SYSTEM_CHANNEL;
 		}
 		messagingTemplate.convertAndSendToUser(
 				principal.getName(),
@@ -46,7 +46,7 @@ public class WebSocketExceptionHandler {
 		log.error("其他异常：", e);
 		messagingTemplate.convertAndSendToUser(
 				principal.getName(),
-				"/queue/system",
+				StompConstant.USER_SYSTEM_CHANNEL,
 				R.error("ex.unknown"));
 	}
 

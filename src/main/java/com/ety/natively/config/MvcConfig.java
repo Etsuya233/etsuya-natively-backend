@@ -60,10 +60,10 @@ public class MvcConfig implements WebMvcConfigurer {
 	@Bean
 	public ThreadPoolTaskExecutor taskExecutor() {
 		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-		executor.setCorePoolSize(5);  // 最小线程数
-		executor.setMaxPoolSize(10);  // 最大线程数
+		executor.setCorePoolSize(4);  // 最小线程数
+		executor.setMaxPoolSize(12);  // 最大线程数
 		executor.setQueueCapacity(100);  // 队列容量
-		executor.setThreadNamePrefix("async-executor-");
+		executor.setThreadNamePrefix("ety-async-executor-");
 		executor.initialize();
 		return executor;
 	}
@@ -73,12 +73,5 @@ public class MvcConfig implements WebMvcConfigurer {
 		configurer.setTaskExecutor(taskExecutor());
 		configurer.setDefaultTimeout(300000);  // 默认超时时间，单位是毫秒
 	}
-
-//	@Bean
-//	public RestClientCustomizer restClientCustomizer() {
-//		return restClientBuilder -> restClientBuilder.requestFactory(ClientHttpRequestFactories.get(ClientHttpRequestFactorySettings.DEFAULTS
-//				.withConnectTimeout(Duration.ofSeconds(5))
-//				.withReadTimeout(Duration.ofSeconds(30))));
-//	}
 
 }

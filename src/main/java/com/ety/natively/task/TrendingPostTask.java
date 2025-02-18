@@ -4,9 +4,7 @@ import com.ety.natively.constant.Constant;
 import com.ety.natively.constant.RedisConstant;
 import com.ety.natively.domain.po.Post;
 import com.ety.natively.domain.vo.PostPreview;
-import com.ety.natively.mapper.PostMapper;
 import com.ety.natively.service.IPostService;
-import com.ety.natively.service.IPostServiceV2;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +26,7 @@ import java.util.stream.Collectors;
 public class TrendingPostTask {
 
 	private final StringRedisTemplate redisTemplate;
-	private final IPostServiceV2 postService;
+	private final IPostService postService;
 
 	@PostConstruct
 	public void init(){
@@ -37,7 +35,7 @@ public class TrendingPostTask {
 		List<String> postIdsStr = redisTemplate.opsForList().range(RedisConstant.POST_TRENDING_ID_LIST, 0, 99);
 
 		try {
-			List<Long> postIds = (List<Long>) postIdsStr
+			List<Long> postIds = postIdsStr
 					.stream()
 					.map(Long::parseLong)
 					.toList();
@@ -56,6 +54,7 @@ public class TrendingPostTask {
 		Constant.POST_TRENDING_RECORDING.compareAndSet(false, true);
 
 		try {
+			// acquire list
 			Set<ZSetOperations.TypedTuple<String>> res = redisTemplate.opsForZSet()
 					.reverseRangeByScoreWithScores(RedisConstant.POST_SCORE, 0, Integer.MAX_VALUE, 0, 100);
 
@@ -90,6 +89,9 @@ public class TrendingPostTask {
 			redisTemplate.opsForSet().add(RedisConstant.POST_TRENDING_ID_SET, postIdsStr);
 			redisTemplate.delete(RedisConstant.POST_TRENDING_ID_LIST);
 			redisTemplate.opsForList().rightPushAll(RedisConstant.POST_TRENDING_ID_LIST, postIdsStr);
+
+			// remove score
+			redisTemplate.delete(RedisConstant.POST_SCORE);
 
 			// save preview to java
 			List<Post> posts = postService.lambdaQuery()

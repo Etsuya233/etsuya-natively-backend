@@ -3,9 +3,12 @@ package com.ety.natively.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch.core.CreateRequest;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.ety.natively.constant.*;
 import com.ety.natively.domain.dto.*;
+import com.ety.natively.domain.elastic.UserDocument;
 import com.ety.natively.domain.po.User;
 import com.ety.natively.domain.po.UserLanguage;
 import com.ety.natively.domain.po.UserOauth;
@@ -39,6 +42,7 @@ import io.minio.PutObjectArgs;
 import io.minio.errors.*;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -74,12 +78,12 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
 	private final PasswordEncoder passwordEncoder;
 	private final JwtUtils jwtUtils;
 	private final StringRedisTemplate redisTemplate;
-	private final GeneralService generalService;
 	private final UserLanguageMapper userLanguageMapper;
 	private final OAuth2Properties oAuth2Properties;
 	private final MinioClient minioClient;
@@ -90,17 +94,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	private final IUserLanguageService userLanguageService;
 	private final IUserRelationshipService userRelationshipService;
 	private final UserRelationshipMapper userRelationshipMapper;
-
-	private Set<String> languageCodes;
-	private final Set<String> locations = new HashSet<>();
-
-	@PostConstruct
-	public void init() {
-		languageCodes = generalService.getLanguageCodes();
-		for (Locale locale : Locale.getAvailableLocales()) {
-			locations.add(locale.getCountry());
-		}
-	}
+	private final ElasticsearchClient elasticsearchClient;
 
 	@Override
 	public LoginVo login(LoginDto loginDto) {
@@ -150,8 +144,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
 	@Override
 	@Transactional
-	public void register(RegisterDto registerDto) {
+	public LoginVo register(RegisterDto registerDto) {
 		BaseContext.setUserId(null);
+
+		if(registerDto.getEmail() == null || registerDto.getEmail().trim().isEmpty()){
+			registerDto.setEmail(null);
+		}
+
 		//检验是否重复
 		Long usernameCount = this.lambdaQuery()
 				.eq(User::getUsername, registerDto.getUsername())
@@ -173,22 +172,42 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 			if(selection.getProficiency() <= 0 || selection.getProficiency() > 5){
 				throw new BaseException(ExceptionEnum.USER_LANGUAGE_PROFICIENCY_FAILED);
 			}
-			if(!languageCodes.contains(selection.getLanguage())){
-				throw new BaseException(ExceptionEnum.USER_LANGUAGE_FAILED);
+			if(!I18NUtil.isSupportedLanguage(selection.getLanguage())){
+				throw new BaseException(ExceptionEnum.USER_UNSUPPORTED_LANGUAGE);
 			}
 			languages.add(new UserLanguage(null, null, selection.getLanguage(), selection.getProficiency()));
 		}
+
 		//注册成功，插入数据库
 		User user = BeanUtil.toBean(registerDto, User.class);
 		String encodedPassword = passwordEncoder.encode(user.getPassword());
 		user.setPassword(encodedPassword);
+		user.setAvatar("/data/natively-avatar/user.jpg");
 		this.save(user);
 		languages.forEach(lang -> lang.setUserId(user.getId()));
 		userLanguageMapper.insert(languages);
+
+		//插入ES
+		UserDocument userDocument = new UserDocument(user.getId(), user.getUsername(), user.getNickname());
+		try {
+			elasticsearchClient.index(i -> i
+					.index(ElasticConstant.USER_INDEX)
+					.id(user.getId().toString())
+					.document(userDocument));
+		} catch (IOException e) {
+			log.debug("User插入ES失败：{}", user.getId().toString());
+		}
+
 		//检查是否是OAuth2注册
 		if(registerDto.getOwner() != null){
 			oAuth2RegisterComplete(registerDto.getOwner(), registerDto.getOwnerId(), user.getId());
 		}
+
+		// 返回登录信息
+		LoginDto loginDto = new LoginDto();
+		loginDto.setUsername(registerDto.getUsername());
+		loginDto.setPassword(registerDto.getPassword());
+		return login(loginDto);
 	}
 
 	@Override
@@ -236,7 +255,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		Long id = BaseContext.getUserId();
 
 		User user = this.getById(id);
-		user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
 		user.setPassword(null);
 		// 用户语言信息
 		List<UserLanguage> langs = userLanguageService.lambdaQuery()
@@ -251,7 +269,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		Long userId = BaseContext.getUserId();
 
 		User user = this.getById(id);
-		user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
 		//TODO 这里需要一些隐私设置，比如跟据是否暂时某些信息来屏蔽某些字段
 		user.setPassword(null);
 		user.setEmail(null);
@@ -348,7 +365,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		String avatar = dto.getAvatar();
 		String avatarFilename;
 		if(avatar == null){
-			avatarFilename = "user.png";
+			avatarFilename = "user.jpg";
 		} else {
 			avatarFilename = avatar.substring(Math.min(avatar.length(), MinioConstant.AVATAR_BUCKET.length() + 7));
 		}
@@ -359,12 +376,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		try {
 			GetObjectResponse object = minioClient.getObject(getObjectArgs);
 			if(object == null){
-				avatarFilename = "user.png";
+				avatarFilename = "user.jpg";
 			}
 		} catch (Exception e){
-			avatarFilename = "user.png";
+			avatarFilename = "user.jpg";
 		}
-		user.setAvatar(avatarFilename);
+		String avatarUrl = minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, avatarFilename);
+		user.setAvatar(avatarUrl);
 		this.updateById(user);
 
 		// language
@@ -399,10 +417,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 				.list()
 				.stream()
 				.collect(Collectors.groupingBy(UserLanguage::getUserId, Collectors.toList()));
-		return users.stream().map(user -> {
-			user.setAvatar(minioUtils.generateFileUrl(MinioConstant.AVATAR_BUCKET, user.getAvatar()));
-			return UserVo.of(user, userLangs.get(user.getId()));
-		}).toList();
+		return users.stream().map(user -> UserVo.of(user, userLangs.get(user.getId()))).toList();
 	}
 
 	@Override
@@ -606,6 +621,38 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 		} catch (Exception e) {
 			throw new BaseException(ExceptionEnum.USER_AVATAR_UPLOAD_FAILED);
 		}
+	}
+
+	@Override
+	public void changePassword(ChangePasswordDto dto) {
+		String oldPassword = dto.getOldPassword();
+		String newPassword = dto.getNewPassword();
+
+		Long userId = BaseContext.getUserId();
+		User user = this.getById(userId);
+		String encodedOldPassword = user.getPassword();
+
+		if(!passwordEncoder.matches(oldPassword, encodedOldPassword)){
+			throw new BaseException(ExceptionEnum.USER_PASSWORD_NOT_MATCH);
+		}
+
+		if(!Pattern.matches(RegexConstant.PASSWORD, newPassword)){
+			throw new BaseException(ExceptionEnum.USER_PASSWORD_FORMAT_NOT_MATCH);
+		}
+
+		// update password
+		user.setPassword(passwordEncoder.encode(newPassword));
+
+		// update version
+		int version = user.getVersion() + 1;
+		if(version + 1 >= Short.MAX_VALUE){
+			version = 0;
+		}
+		user.setVersion(version);
+		redisTemplate.opsForValue().set(RedisConstant.USER_VERSION_TOKEN_PREFIX + userId,
+				String.valueOf(version), RedisConstant.USER_VERSION_TTL, TimeUnit.SECONDS);
+
+		this.updateById(user);
 	}
 
 	//------------------- OAuth2 -------------------

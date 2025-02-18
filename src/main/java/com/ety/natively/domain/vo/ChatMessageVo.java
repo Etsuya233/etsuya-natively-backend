@@ -7,6 +7,7 @@ import java.io.Serial;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 import com.ety.natively.domain.po.ChatMessage;
@@ -60,16 +61,13 @@ public class ChatMessageVo implements Serializable {
 	 */
 	private String content;
 
-	private String date;
-
-	private String time;
+	private Long timestamp;
 
 	public static ChatMessageVo of(ChatMessage chatMessage) {
 		ChatMessageVo chatMessageVo = new ChatMessageVo();
 		BeanUtils.copyProperties(chatMessage, chatMessageVo);
-		String formatted = dateTimeFormatter.format(chatMessage.getCreateTime());
-		chatMessageVo.setDate(formatted.substring(0, 10));
-		chatMessageVo.setTime(formatted.substring(11, 19));
+		long epochMilli = chatMessage.getCreateTime().toInstant(ZoneOffset.UTC).toEpochMilli();
+		chatMessageVo.setTimestamp(epochMilli);
 		return chatMessageVo;
 	}
 

@@ -64,6 +64,8 @@ public class User implements Serializable {
      */
     private Integer gender;
 
+    private String bio;
+
     /**
      * 国家或地区 ISO 3166-1
      */

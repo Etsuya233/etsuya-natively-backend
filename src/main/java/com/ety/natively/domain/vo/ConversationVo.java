@@ -24,9 +24,7 @@ public class ConversationVo implements Serializable {
 
 	private String content;
 
-	private String lastTimeDisplay; //相对时间
-
-	private LocalDateTime lastTime; //日期标准
+	private Long timestamp;
 
 	private Long lastId;
 }

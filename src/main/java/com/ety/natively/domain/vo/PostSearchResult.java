@@ -2,23 +2,19 @@ package com.ety.natively.domain.vo;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
 public class PostSearchResult {
 
-	private Long id;
-
-	private Long userId;
-	private Integer type;
-	private String nickname;
-	private String avatar;
-	private List<UserLanguageVo> userLanguages;
+	private String id;
 
 	private String title;
 	private String content;
-	private List<String> lang;
+	private List<String> languages;
 
 	private String highlightedContent;
+	private LocalDateTime createTime;
 
 }

@@ -1,5 +1,6 @@
 package com.ety.natively.service.impl;
 
+import com.ety.natively.config.StompConstant;
 import com.ety.natively.constant.MessageType;
 import com.ety.natively.constant.MinioConstant;
 import com.ety.natively.domain.R;
@@ -21,12 +22,15 @@ import com.ety.natively.utils.I18NUtil;
 import com.ety.natively.utils.MinioUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -53,8 +57,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 	private final IUserService userService;
 	private final ChatUnreadMapper chatUnreadMapper;
 	private final MinioUtils minioUtils;
-
-	private static final Object[] LOCK_POOL = new Object[1024];
+	private final StringRedisTemplate redisTemplate;
 
 	@Override
 	public void sendMessage(ChatMessage message, Principal principal) {
@@ -67,7 +70,14 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
 		// check if we are friend
 		if(!userService.checkIsContact(senderId, receiverId)){
-			throw new BaseWSException(ExceptionEnum.CHAT_NOT_CONTACT, "/queue/chat/message", receiverId);
+			Long count = this.lambdaQuery()
+					.eq(ChatMessage::getSenderId, senderId)
+					.eq(ChatMessage::getReceiverId, receiverId)
+					.gt(ChatMessage::getCreateTime, LocalDateTime.now().minusDays(7))
+					.count();
+			if(count >= 1){
+				throw new BaseWSException(ExceptionEnum.CHAT_ONLY_ONE_MESSAGE_IN_A_WEEK_WHEN_NOT_CONTACT, "/queue/chat", receiverId);
+			}
 		}
 
 		//save
@@ -82,7 +92,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 		long userB = Math.max(senderId, receiverId);
 		conversationMapper.saveOrUpdateLastId(userA, userB, message.getId());
 
-		//unread (注意更新的是对方的未读！！) TODO 线程安全问题
+		//unread (注意更新的是对方的未读！！)
 		chatUnreadMapper.unreadCountPlusOne(senderId, receiverId);
 
 		//send
@@ -152,25 +162,23 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 				vo.setUnread(0);
 			}
 
-			UserVo user = userMap.get(receiverId);
-			if(user != null){
-				vo.setReceiverId(receiverId);
-				vo.setNickname(user.getNickname());
-				vo.setAvatar(user.getAvatar());
-			}
+			UserVo user = userMap.getOrDefault(receiverId, UserVo.EMPTY);
+			vo.setReceiverId(receiverId);
+			vo.setNickname(user.getNickname());
+			vo.setAvatar(user.getAvatar());
 
 			ChatMessage lastMsg = lastMsgMap.get(c.getLastId());
 			if(lastMsg != null){
 				vo.setLastId(c.getLastId());
-				vo.setLastTime(lastMsg.getCreateTime());
-				vo.setLastTimeDisplay(I18NUtil.getRelativeTime(lastMsg.getCreateTime()));
+				long timestamp = lastMsg.getCreateTime().toInstant(ZoneOffset.UTC).toEpochMilli();
+				vo.setTimestamp(timestamp);
 				vo.setContent(lastMsg.getContent());
 			}
 
 			return vo;
 		})
-				.filter(v -> v.getReceiverId() != null)
-				.sorted((v1, v2) -> v2.getLastId().compareTo(v1.getLastId())) // larger the first TODO when last id is null it broke
+				.filter(v -> v.getLastId() != null)  // lol
+				.sorted((v1, v2) -> v2.getLastId().compareTo(v1.getLastId()))
 				.toList();
 	}
 
@@ -190,12 +198,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 				.list();
 		return messages.stream()
 				.sorted(Comparator.comparing(ChatMessage::getId))
-				.map(message -> {
-					if(!message.getType().equals(MessageType.TEXT)){
-						message.setContent(minioUtils.generateFileUrl(MinioConstant.CHAT_ATTACHMENT_BUCKET, message.getContent()));
-					}
-					return ChatMessageVo.of(message);
-				})
+				.map(ChatMessageVo::of)
 				.toList();
 	}
 
@@ -229,11 +232,11 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 		message.setReceiverId(receiverId);
 		message.setCreateTime(now);
 		message.setType(type);
-		message.setContent(filename);
+		message.setContent(url);
 		this.save(message);
 		//last id
 		conversationMapper.saveOrUpdateLastId(userA, userB, message.getId());
-		//unread (注意更新的是对方的未读！！) TODO 线程安全问题
+		//unread (注意更新的是对方的未读！！)
 		chatUnreadMapper.unreadCountPlusOne(senderId, receiverId);
 
 		message.setContent(url);
@@ -242,11 +245,13 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
 	private void dispatchMessage(ChatMessage message) {
 		ChatMessageVo vo = ChatMessageVo.of(message);
+		long timestamp = message.getCreateTime().toInstant(ZoneOffset.UTC).toEpochMilli();
+		vo.setTimestamp(timestamp);
 		messagingTemplate.convertAndSendToUser(String.valueOf(message.getSenderId()),
-				"/queue/chat/message",
+				StompConstant.USER_CHAT_CHANNEL,
 				R.ok(vo));
 		messagingTemplate.convertAndSendToUser(String.valueOf(message.getReceiverId()),
-				"/queue/chat/message",
+				StompConstant.USER_CHAT_CHANNEL,
 				R.ok(vo));
 	}
 }

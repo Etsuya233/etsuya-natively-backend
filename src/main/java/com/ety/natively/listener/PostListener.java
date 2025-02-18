@@ -9,18 +9,25 @@ import com.ety.natively.mapper.CommentMapper;
 import com.ety.natively.mapper.PostMapper;
 import com.ety.natively.service.ICommentService;
 import com.ety.natively.service.ICommentSummaryService;
-import com.ety.natively.service.IPostServiceV2;
+import com.ety.natively.service.IPostService;
 import com.ety.natively.service.IPostSummaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.core.ExchangeTypes;
 import org.springframework.amqp.rabbit.annotation.Exchange;
 import org.springframework.amqp.rabbit.annotation.Queue;
 import org.springframework.amqp.rabbit.annotation.QueueBinding;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.listener.RabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.listener.RabbitListenerEndpoint;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -34,7 +41,7 @@ import java.util.List;
 public class PostListener {
 
 	private final RabbitTemplate rabbitTemplate;
-	private final IPostServiceV2 postService;
+	private final IPostService postService;
 	private final ICommentService commentService;
 	private final CommentMapper commentMapper;
 	private final PostMapper postMapper;
@@ -78,8 +85,11 @@ public class PostListener {
 			key = MqConstant.KEY.COMMENT_SCORE
 	))
 	@Transactional
-	public void addCommentScore(Long commentId){
-		postMapper.addCommentScore(commentId);
+	public void addCommentCount(Long commentId){
+		// cascade comment count
+		postMapper.addCommentCount(commentId);
+
+		// post comment count
 		Comment comment = commentService.getById(commentId);
 		Long postId = comment.getPostId();
 		postSummaryService.lambdaUpdate()
@@ -95,15 +105,27 @@ public class PostListener {
 			如果帖子内容属于其他类型，请根据内容生成合适的回复。
 			
 			注意事项：
-			请使用与用户提问的语言或要求的语言回复！这个很重要！
-			回复须为纯文本格式，可以使用换行符等。但禁止使用任何Markdown语法。
+			你需要根据用户提问的语言回复。如果使用英语提问就使用英语回答。（很重要的一点！）
+			回复须为纯文本格式，可以使用换行符等。禁止使用任何Markdown语法，包括加粗等。
 			回复语气要自然、亲切，仿佛与用户面对面交流。
 			回复不要太过于长。
 			请严格按照以上规则生成符合要求的回复。后续会给出用户内容。
+			
+			用户帖子如下：
+			
 			""";
 	public static final ChatOptions POST_AI_OPTIONS = ChatOptions.builder()
 			.model("deepseek-r1")
 			.build();
+
+	@Bean
+	public RabbitListenerContainerFactory<SimpleMessageListenerContainer> postAiContainerFactory(ConnectionFactory connectionFactory){
+		SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+		factory.setConnectionFactory(connectionFactory);
+		factory.setPrefetchCount(1);
+		factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
+		return factory;
+	}
 
 	@RabbitListener(bindings = @QueueBinding(
 			value = @Queue(value = MqConstant.QUEUE.POST_AI, durable = "true"),
@@ -119,8 +141,7 @@ public class PostListener {
 		String content = dto.getContent();
 
 		Flux<String> contentFlux = chatClient.prompt()
-				.system(POST_AI_SYSTEM_MESSAGE)
-				.user(content)
+				.user(POST_AI_SYSTEM_MESSAGE + content)
 				.options(POST_AI_OPTIONS)
 				.stream()
 				.content();
@@ -146,9 +167,13 @@ public class PostListener {
 		comment.setContent(reply);
 		commentService.save(comment);
 
-		commentSummaryService.lambdaUpdate()
-				.eq(CommentSummary::getCommentId, comment.getId())
-				.setIncrBy(CommentSummary::getCommentCount, 1)
+		CommentSummary summary = new CommentSummary();
+		summary.setCommentId(comment.getId());
+		commentSummaryService.save(summary);
+
+		postSummaryService.lambdaUpdate()
+				.eq(PostSummary::getPostId, postId)
+				.setIncrBy(PostSummary::getCommentCount, 1)
 				.update();
 	}
 

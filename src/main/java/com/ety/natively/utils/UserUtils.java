@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -37,7 +38,9 @@ public class UserUtils {
 		if(versionStr == null){
 			User user = userMapper.selectById(userId);
 			version = user.getVersion();
-			redisTemplate.opsForValue().set(RedisConstant.USER_VERSION_TOKEN_PREFIX + userId, version.toString());
+			redisTemplate.opsForValue().set(RedisConstant.USER_VERSION_TOKEN_PREFIX + userId, version.toString(),
+					RedisConstant.USER_VERSION_TTL,
+					TimeUnit.SECONDS);
 		} else {
 			version = Integer.parseInt(versionStr);
 		}

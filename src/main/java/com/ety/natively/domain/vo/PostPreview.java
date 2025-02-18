@@ -23,11 +23,11 @@ public class PostPreview {
 	private Long commentCount;
 
 	private String title;
-	private Integer type;
 	private String content;
 	private String image;
 	private String voice;
 	private Boolean hasMore;
+	private List<String> languages;
 
 	// relative time
 	private LocalDateTime createTime;

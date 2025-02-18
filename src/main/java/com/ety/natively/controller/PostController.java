@@ -1,13 +1,8 @@
 package com.ety.natively.controller;
 
-
 import com.ety.natively.domain.R;
 import com.ety.natively.domain.dto.*;
-import com.ety.natively.domain.po.Comment;
-import com.ety.natively.domain.vo.BookmarkVo;
-import com.ety.natively.domain.vo.CommentVo;
-import com.ety.natively.domain.vo.PostInfoVo;
-import com.ety.natively.domain.vo.PostVo;
+import com.ety.natively.domain.vo.*;
 import com.ety.natively.service.IPostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -15,86 +10,144 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-/**
- * <p>
- *  前端控制器
- * </p>
- *
- * @author Etsuya
- * @since 2024-11-10
- */
 @RestController
-@RequestMapping("/post")
+@RequestMapping("/postV2")
 @RequiredArgsConstructor
 public class PostController {
 
 	private final IPostService postService;
 
-	@Deprecated
-	public R<Long> createPost(@RequestBody PostDto dto){
-		Long id = postService.createPost(dto);
-		return R.ok(id);
-	}
-
 	@PostMapping
-	public R<Long> createPostNew(
-			@RequestParam(value = "title", required = false) String title,
-			@RequestParam("content") String content,
-			@RequestParam("type") Integer type,
-			@RequestParam(value = "images", required = false) MultipartFile[] images,
-			@RequestParam(value = "voice", required = false) MultipartFile voice){
-		Long id = postService.createPostNew(title, content, type, images, voice);
-		return R.ok(id);
+	public R<Long> createPost(@RequestBody PostCreationDto dto){
+		Long postID = postService.createPost(dto);
+		return R.ok(postID);
 	}
 
-	@GetMapping("/recommendation")
-	public R<List<PostInfoVo>> getPosts(@RequestParam(value = "lastId", required = false) Long lastId){
-		List<PostInfoVo> ret = postService.getRecommendation(lastId);
-		return R.ok(ret);
+	@GetMapping("/postVerification")
+	public R<String> getCreatePostVerificationCode(){
+		String code = postService.getCreatePostVerificationCode();
+		return R.ok(code);
 	}
 
 	@GetMapping
-	public R<PostVo> getPost(@RequestParam(value = "id") Long id){
-		PostVo vo = postService.getPost(id);
-		return R.ok(vo);
-	}
-
-	@GetMapping("/comment")
-	public R<List<CommentVo>> getPostComments(
-			@RequestParam(value = "id") Long id,
-			@RequestParam(value = "lastId", required = false) Long lastId){
-		List<CommentVo> ret = postService.getPostComment(id, lastId);
+	public R<PostVo> getPostById(@RequestParam(value = "id") Long id){
+		PostVo ret = postService.getPostById(id);
 		return R.ok(ret);
 	}
 
-	@Deprecated
-	@PostMapping("/comment")
-	public R<CommentVo> addComment(@RequestBody CommentDto dto){
-		CommentVo vo = postService.addComment(dto);
-		return R.ok(vo);
+	@PostMapping("/file")
+	public R<String> uploadPostAttachment(@RequestParam(name = "file", required = false) MultipartFile file,
+										  @RequestParam("code") String verificationCode){
+		String name = postService.uploadPostAttachment(file, verificationCode);
+		return R.ok(name);
 	}
 
-	@PostMapping("/commentNew")
-	public R<CommentVo> addCommentNew(
-			@RequestParam("postId") Long postId,
-			@RequestParam(value = "parentId", required = false) Long parentId,
-			@RequestParam("content") String content,
-			@RequestParam(value = "images", required = false) MultipartFile[] images,
-			@RequestParam(value = "voice", required = false) MultipartFile voice){
-		CommentVo ret = postService.addCommentNew(postId, parentId, content, images, voice);
+	@GetMapping("/recommendation")
+	public R<List<PostPreview>> getPostRecommendation(@RequestParam(value = "lastId", required = false) Long lastId){
+		List<PostPreview> ret = postService.getPostRecommendation(lastId);
+		return R.ok(ret);
+	}
+
+	@GetMapping("/following")
+	public R<List<PostPreview>> getPostByFollowing(@RequestParam(value = "lastId", required = false) Long lastId){
+		List<PostPreview> ret = postService.getPostByFollowing(lastId);
+		return R.ok(ret);
+	}
+
+	// optimize this method
+	@GetMapping("/trending")
+	public R<List<PostPreview>> getPostTrending(@RequestParam(value = "rank", defaultValue = "1") Integer rank){
+		List<PostPreview> ret = postService.getPostTrending(rank);
 		return R.ok(ret);
 	}
 
 	@PostMapping("/vote")
-	public R<Boolean> vote(@RequestBody VoteDto dto){
-		boolean ret = postService.vote(dto);
+	public R<VoteCompleteVo> vote(@RequestBody VoteDto dto){
+		VoteCompleteVo ret = postService.vote(dto);
 		return R.ok(ret);
 	}
 
-	@GetMapping("/user")
-	public R<List<PostInfoVo>> getUserPosts(@RequestParam("userId") Long userId,
-										@RequestParam(value = "lastId", required = false) Long lastId){
-		List<PostInfoVo> ret = postService.getUserPosts(userId, lastId);
+	@PostMapping("/comment")
+	public R<CommentVo> createComment(
+			@RequestParam(value = "postId", required = false) Long postId,
+			@RequestParam(value = "parentId", required = false) Long parentId,
+			@RequestParam("content") String content,
+			@RequestParam(value = "image", required = false) MultipartFile image,
+			@RequestParam(value = "voice", required = false) MultipartFile voice,
+			@RequestParam(value = "compare", required = false) String compare){
+		CommentVo vo = postService.createComment(postId, parentId, content, image, voice, compare);
+		return R.ok(vo);
+	}
+
+	@GetMapping("/comments")
+	public R<List<CommentVo>> getCommentList(@RequestParam(name = "post", defaultValue = "true") Boolean post,
+											 @RequestParam("id") Long id,
+											 @RequestParam(value = "lastId", required = false) Long lastId,
+											 @RequestParam(value = "sort", defaultValue = "1") Integer sort){
+		List<CommentVo> ret = postService.getCommentList(post, id, lastId, sort);
 		return R.ok(ret);
+	}
+
+	@GetMapping("/comments/hot")
+	public R<List<CommentVo>> getCommentListByHot(@RequestParam("id") Long id,
+												  @RequestParam(value = "count", defaultValue = "0") Long count){
+		List<CommentVo> ret = postService.getCommentListByHot(id, count);
+		return R.ok(ret);
+	}
+
+	@GetMapping("/comment")
+	public R<CommentVo> getCommentById(@RequestParam(value = "id") Long id){
+		CommentVo ret = postService.getCommentById(id);
+		return R.ok(ret);
+	}
+
+	@GetMapping("/comment/parent")
+	public R<CommentParentChain> getParentCommentCascade(@RequestParam("id") Long id){
+		CommentParentChain ret = postService.getParentCommentCascade(id);
+		return R.ok(ret);
+	}
+
+	@PostMapping("/bookmark")
+	public R<Void> createBookmark(@RequestBody BookmarkCreateDto dto){
+		postService.createBookmark(dto);
+		return R.ok();
+	}
+
+	@GetMapping("/bookmark")
+	public R<List<BookmarkVo>> getBookmark(@RequestParam(required = false) Long lastId){
+		List<BookmarkVo> ret = postService.getBookmark(lastId);
+		return R.ok(ret);
+	}
+
+	@PutMapping("/bookmark")
+	public R<Void> updateBookmark(@RequestBody BookmarkUpdateDto dto){
+		postService.updateBookmark(dto);
+		return R.ok();
+	}
+
+	@DeleteMapping("/bookmark/{id}")
+	public R<Void> deleteBookmark(@PathVariable Long id){
+		postService.deleteBookmark(id);
+		return R.ok();
+	}
+
+	@GetMapping("/user")
+	public R<List<PostPreview>> getUserPosts(@RequestParam(required = true) Long userId,
+											 @RequestParam(required = false) Long lastId){
+		List<PostPreview> ret = postService.getUserPost(userId, lastId);
+		return R.ok(ret);
+	}
+
+	@DeleteMapping
+	public R<Void> deletePost(@RequestBody DeleteDto dto){
+		postService.deletePost(dto);
+		return R.ok();
+	}
+
+	// mq ack
+	@DeleteMapping("/comment")
+	public R<Void> deleteComment(@RequestBody DeleteDto dto){
+		postService.deleteComment(dto);
+		return R.ok();
 	}
 }

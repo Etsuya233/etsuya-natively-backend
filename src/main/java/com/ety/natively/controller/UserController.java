@@ -53,15 +53,15 @@ public class UserController {
 	}
 
 	@PostMapping("/register")
-	public R<Void> register(@RequestBody @Validated RegisterDto registerDto, BindingResult bindingResult){
+	public R<LoginVo> register(@RequestBody @Validated RegisterDto registerDto, BindingResult bindingResult){
 		if(bindingResult.hasErrors()){
 			String errorMsg = bindingResult.getAllErrors().stream()
 					.map(e -> t.get(e.getDefaultMessage(), BaseContext.getLanguage()))
 					.collect(Collectors.joining("\n"));
 			return R.error(errorMsg);
 		}
-		userService.register(registerDto);
-		return R.ok();
+		LoginVo ret = userService.register(registerDto);
+		return R.ok(ret);
 	}
 
 	@PostMapping("/refresh")
@@ -160,6 +160,12 @@ public class UserController {
 	public R<String> uploadAvatar(@RequestParam(value = "avatar") MultipartFile avatar){
 		String url = userService.uploadAvatar(avatar);
 		return R.ok(url);
+	}
+
+	@PutMapping("/password")
+	public R<Void> changePassword(@RequestBody ChangePasswordDto dto){
+		userService.changePassword(dto);
+		return R.ok();
 	}
 
 }

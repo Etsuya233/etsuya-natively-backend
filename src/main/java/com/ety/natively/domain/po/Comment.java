@@ -7,6 +7,7 @@ import java.io.Serial;
 import java.time.LocalDateTime;
 import com.baomidou.mybatisplus.annotation.TableId;
 import java.io.Serializable;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 
 import lombok.AllArgsConstructor;
@@ -75,5 +76,16 @@ public class Comment implements Serializable {
     private LocalDateTime updateTime;
 
     public static Comparator<Comment> sortByIdAsc = Comparator.comparing(Comment::getId);
+
+    public static final Comment EMPTY = new Comment();
+
+    static {
+        EMPTY.setId(0L);
+        EMPTY.setUserId(0L);
+        EMPTY.setPostId(0L);
+        EMPTY.setParentId(0L);
+        EMPTY.setContent("(Deleted)");
+        EMPTY.setCreateTime(LocalDateTime.ofEpochSecond(0, 0, ZoneOffset.UTC));
+    }
 
 }

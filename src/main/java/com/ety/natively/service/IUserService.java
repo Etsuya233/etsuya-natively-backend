@@ -20,7 +20,7 @@ public interface IUserService extends IService<User> {
 
 	LoginVo login(LoginDto loginDto);
 
-	void register(RegisterDto registerDto);
+	LoginVo register(RegisterDto registerDto);
 
 	LoginVo refreshUserToken(UserRefreshDto dto);
 
@@ -55,6 +55,8 @@ public interface IUserService extends IService<User> {
 	List<UserVo> getFollowers(Long userId, Long lastId);
 
 	String uploadAvatar(MultipartFile avatar);
+
+	void changePassword(ChangePasswordDto dto);
 
 //	OAuth2LoginVo oAuth2Link(OAuth2Request request);
 }

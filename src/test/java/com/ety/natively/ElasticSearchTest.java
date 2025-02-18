@@ -1,22 +1,18 @@
 package com.ety.natively;
 
-import cn.hutool.json.JSONUtil;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.query_dsl.MatchQuery;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
 import com.ety.natively.domain.dto.*;
+import com.ety.natively.domain.elastic.PostDocument;
 import com.ety.natively.domain.po.Post;
 import com.ety.natively.domain.po.PostLanguage;
 import com.ety.natively.domain.po.User;
-import com.ety.natively.domain.vo.PostSearchResult;
 import com.ety.natively.domain.vo.UserSearchResult;
-import com.ety.natively.domain.vo.UserVo;
 import com.ety.natively.service.IPostLanguageService;
 import com.ety.natively.service.IPostService;
-import com.ety.natively.service.IPostServiceV2;
 import com.ety.natively.service.IUserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -29,6 +25,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,7 +41,7 @@ public class ElasticSearchTest {
 	public ElasticsearchClient client;
 
 	@Autowired
-	public IPostServiceV2 postService;
+	public IPostService postService;
 
 	@Autowired
 	public ObjectMapper objectMapper;
@@ -120,9 +119,10 @@ public class ElasticSearchTest {
 			String postId = post.getId().toString();
 			String userId = post.getUserId().toString();
 			String title = post.getTitle();
+			long epochMilli = post.getCreateTime().toInstant(ZoneOffset.UTC).toEpochMilli();
 			List<PostLanguage> languages = postLangMap.get(post.getId());
 			List<String> langStrs = languages.stream().map(PostLanguage::getLang).toList();
-			PostDocument doc = new PostDocument(postId, userId, title, content, langStrs);
+			PostDocument doc = new PostDocument(postId, title, content, langStrs, epochMilli);
 			BulkOperation operation = new BulkOperation.Builder()
 					.index(in -> in
 							.index("post")
@@ -165,17 +165,6 @@ public class ElasticSearchTest {
 	@Data
 	public static class MultiLangSearch {
 		private String content;
-	}
-
-	@Data
-	@NoArgsConstructor
-	@AllArgsConstructor
-	public static class PostDocument {
-		private String id;
-		private String userId;
-		private String title;
-		private String content;
-		private List<String> lang;
 	}
 
 }

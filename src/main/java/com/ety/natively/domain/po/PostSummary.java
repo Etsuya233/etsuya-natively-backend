@@ -53,5 +53,14 @@ public class PostSummary implements Serializable, VoteSummary {
      */
     private Long commentCount;
 
+    public static final PostSummary EMPTY = new PostSummary();
+
+    static {
+        EMPTY.setPostId(0L);
+        EMPTY.setUpvoteCount(0L);
+        EMPTY.setDownvoteCount(0L);
+        EMPTY.setCommentCount(0L);
+    }
+
 
 }
